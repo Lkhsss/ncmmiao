@@ -1,3 +1,4 @@
+use crate::messager;
 use aes::cipher::generic_array::typenum::U16;
 use aes::cipher::{generic_array::GenericArray, BlockDecrypt, KeyInit};
 use aes::Aes128;
@@ -8,12 +9,15 @@ use hex::decode;
 use lazy_static::lazy_static;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
+use messager::Signals;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::{self, Value};
+use std::fmt::Debug;
 use std::fs::{self, File};
 use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::str::from_utf8;
+use std::sync::mpsc;
 use std::vec;
 
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -144,13 +148,24 @@ impl Ncmfile {
 
     /// 解密函数
     #[allow(unused_assignments)]
-    pub fn dump(&mut self, outputdir: &Path) -> Result<(), NcmError> {
-        info!("开始解密[{}]文件", self.fullfilename.yellow());
+    pub fn dump(
+        &mut self,
+        outputdir: &Path,
+        tx: mpsc::Sender<messager::Message>,
+        force_save:bool
+    ) -> Result<(), NcmError> {
+        
+
+
+        let messager = messager::Messager::new(self.fullfilename.clone(), tx);
+        let _ = messager.send(Signals::Start);
+        //TODO 通讯合法化
+        // info!("开始解密[{}]文件", self.fullfilename.yellow());
         // 获取magic header 。应为CTENFDAM
         let magic_header = match self.seekread(8) {
             Ok(header) => header,
             Err(_e) => {
-                return Err(NcmError::FileReadError);
+                return Err(NcmError::FileReadError); //TODO去除向上传播
             }
         };
 
@@ -211,11 +226,38 @@ impl Ncmfile {
                 Err(_) => return Err(NcmError::CannotReadMetaInfo),
             };
             debug!("json_data: {}", json_data);
-            let data: Value = match serde_json::from_str(&json_data[..]){Ok(o) => o,
+            let data: Value = match serde_json::from_str(&json_data[..]) {
+                Ok(o) => o,
                 Err(_) => return Err(NcmError::CannotReadMetaInfo),
             }; //解析json数据
             data
         };
+
+        //处理文件路径
+        trace!("拼接文件路径");
+        let path = {
+            let filename = format!(
+                "{}.{}",
+                self.filename,
+                meta_data.get("format").unwrap().as_str().unwrap()
+            );
+
+            // let filename = standardize_filename(filename);
+            debug!("文件名：{}", filename.yellow());
+            //链级创建输出目录
+            match fs::create_dir_all(outputdir) {
+                Err(_) => return Err(NcmError::FileWriteError),
+                _ => (),
+            };
+            outputdir.join(filename)
+        };
+
+        debug!("文件路径: {:?}", path);
+
+        // 先检查是否存在
+        if !force_save && Path::new(&path).exists(){
+            return Err(NcmError::ProtectFile);
+        }
 
         // 跳过4个字节的校验码
         trace!("读取校验码");
@@ -228,8 +270,7 @@ impl Ncmfile {
 
         // 获取图片数据的大小
         trace!("获取图片数据的大小");
-        let image_data_length =
-            u32::from_le_bytes(self.seekread(4)?.try_into().unwrap()) as u64;
+        let image_data_length = u32::from_le_bytes(self.seekread(4)?.try_into().unwrap()) as u64;
 
         // 读取图片，并写入文件当中
         let image_data = self.seekread(image_data_length)?; //读取图片数据
@@ -280,6 +321,7 @@ impl Ncmfile {
 
         //解密音乐数据
         trace!("解密音乐数据");
+        let _ = messager.send(Signals::Decrypt);
         let mut music_data: Vec<u8> = Vec::new();
         loop {
             let mut chunk = self.seekread_no_error(0x8000);
@@ -325,30 +367,15 @@ impl Ncmfile {
 
         //退出循环，写入文件
 
-        //处理文件路径
-        trace!("拼接文件路径");
-        let path = {
-            let filename = format!(
-                "{}.{}",
-                self.filename,
-                meta_data.get("format").unwrap().as_str().unwrap()
-            );
-
-            // let filename = standardize_filename(filename);
-            debug!("文件名：{}", filename.yellow());
-            //链级创建输出目录
-            match fs::create_dir_all(outputdir){Err(_)=>return Err(NcmError::FileWriteError),_=>()};
-            outputdir.join(filename)
-        };
-
-        debug!("文件路径: {:?}", path);
+        
+        let _ = messager.send(Signals::Save);
         self.save(&path, music_data)?;
 
         {
             // 保存封面
-            let mut tag = match Tag::new().read_from_path(&path){
-                Ok(o)=>o,
-                Err(_)=>return Err(NcmError::CoverCannotSave)
+            let mut tag = match Tag::new().read_from_path(&path) {
+                Ok(o) => o,
+                Err(_) => return Err(NcmError::CoverCannotSave),
             };
             let cover = Picture {
                 mime_type: MimeType::Jpeg,
@@ -368,19 +395,21 @@ impl Ncmfile {
             self.fullfilename.yellow(),
             "解密成功".bright_green()
         );
+        let _ = messager.send(Signals::End);
         Ok(())
     }
-    fn save(&mut self, path: &PathBuf, data: Vec<u8>)->Result<(),NcmError> {
-        let music_file = match File::create(path){
-            Ok(o)=>o,
-            Err(_)=>return Err(NcmError::FileWriteError)
+    fn save(&mut self, path: &PathBuf, data: Vec<u8>) -> Result<(), NcmError> {
+
+        let music_file = match File::create(path) {
+            Ok(o) => o,
+            Err(_) => return Err(NcmError::FileWriteError),
         };
         let mut writer = BufWriter::new(music_file);
         let _ = writer.write_all(&data);
         // 关闭文件
-        match writer.flush(){
-            Ok(o)=>o,
-            Err(_)=>return Err(NcmError::FileWriteError)
+        match writer.flush() {
+            Ok(o) => o,
+            Err(_) => return Err(NcmError::FileWriteError),
         };
         Ok(())
     }
@@ -544,7 +573,8 @@ pub enum NcmError {
     FileSkipError,
     FileWriteError,
     FullFilenameError,
-    FileNotFoundError,
+    FileNotFound,
+    ProtectFile,
 }
 
 impl std::error::Error for NcmError {}
@@ -560,6 +590,7 @@ impl std::fmt::Display for NcmError {
             Self::FileReadError => write!(f, "读取文件时发生错误"),
             Self::FileWriteError => write!(f, "写入文件时错误"),
             Self::FullFilenameError => write!(f, "文件名不符合规范"),
+            Self::ProtectFile=>write!(f, "已关闭文件强制覆盖且文件已存在。使用-f或-forcesave开启强制覆盖。"),
             _ => write!(f, "未知错误"),
         }
     }

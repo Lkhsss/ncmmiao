@@ -9,9 +9,14 @@ pub struct Cli {
     #[arg(short, long)]
     pub workers: Option<usize>,
     /// 需要解密的文件夹或文件
-    #[arg(short, long, name = "输入文件/文件夹")]
+    #[arg(short, long, name = "输入文件/目录")]
     pub input: Vec<String>,
 
-    #[arg(short, long, name = "输出文件夹", default_value = "NcmmiaoOutput")]
+    /// 输出目录
+    #[arg(short, long, name = "输出目录", default_value = "NcmmiaoOutput")]
     pub output: Option<String>,
+
+    /// 强制覆盖保存开关
+    #[arg(short,long,name="强制覆盖开关")]
+    pub forcesave:bool
 }

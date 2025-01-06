@@ -42,3 +42,10 @@
 ### Refactoring
 - 优化读取逻辑
 - :hammer: 重构代码！大量减少panic!
+
+## [2.5.8] - 2025.1.7
+### Features :sparkles:
+- 增加进度条支持（虽然很丑）
+- 增加覆盖保存开关
+### Refactoring
+- :hammer: 重构代码！使用mpsc进行线程通讯。
