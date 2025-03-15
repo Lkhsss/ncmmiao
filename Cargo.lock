@@ -811,7 +811,7 @@ checksum = "07dcca13d1740c0a665f77104803360da0bdb3323ecce2e93fa2c959a6d52806"
 
 [[package]]
 name = "ncmmiao"
-version = "2.5.10"
+version = "2.5.11"
 dependencies = [
  "aes",
  "audiotags",
