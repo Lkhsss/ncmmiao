@@ -152,11 +152,8 @@ impl Ncmfile {
         &mut self,
         outputdir: &Path,
         tx: mpsc::Sender<messager::Message>,
-        force_save:bool
+        force_save: bool,
     ) -> Result<(), NcmError> {
-        
-
-
         let messager = messager::Messager::new(self.fullfilename.clone(), tx);
         let _ = messager.send(Signals::Start);
         //TODO 通讯合法化
@@ -201,6 +198,7 @@ impl Ncmfile {
         //读取meta信息的数据大小
         trace!("获取meta信息数据大小");
         let meta_length = u32::from_le_bytes(self.seekread(4)?.try_into().unwrap()) as u64;
+        let _ = messager.send(Signals::GetMetaInfo);
 
         // 读取meta信息
         trace!("读取meta信息");
@@ -255,7 +253,7 @@ impl Ncmfile {
         debug!("文件路径: {:?}", path);
 
         // 先检查是否存在
-        if !force_save && Path::new(&path).exists(){
+        if !force_save && Path::new(&path).exists() {
             return Err(NcmError::ProtectFile);
         }
 
@@ -268,6 +266,7 @@ impl Ncmfile {
         trace!("跳过5个字节");
         self.skip(5)?;
 
+        let _ = messager.send(Signals::GetCover);
         // 获取图片数据的大小
         trace!("获取图片数据的大小");
         let image_data_length = u32::from_le_bytes(self.seekread(4)?.try_into().unwrap()) as u64;
@@ -367,7 +366,6 @@ impl Ncmfile {
 
         //退出循环，写入文件
 
-        
         let _ = messager.send(Signals::Save);
         self.save(&path, music_data)?;
 
@@ -399,7 +397,6 @@ impl Ncmfile {
         Ok(())
     }
     fn save(&mut self, path: &PathBuf, data: Vec<u8>) -> Result<(), NcmError> {
-
         let music_file = match File::create(path) {
             Ok(o) => o,
             Err(_) => return Err(NcmError::FileWriteError),
@@ -590,7 +587,10 @@ impl std::fmt::Display for NcmError {
             Self::FileReadError => write!(f, "读取文件时发生错误"),
             Self::FileWriteError => write!(f, "写入文件时错误"),
             Self::FullFilenameError => write!(f, "文件名不符合规范"),
-            Self::ProtectFile=>write!(f, "已关闭文件强制覆盖且文件已存在。使用-f或-forcesave开启强制覆盖。"),
+            Self::ProtectFile => write!(
+                f,
+                "已关闭文件强制覆盖且文件已存在。使用-f或-forcesave开启强制覆盖。"
+            ),
             _ => write!(f, "未知错误"),
         }
     }
