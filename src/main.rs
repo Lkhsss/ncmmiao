@@ -21,6 +21,8 @@ mod test;
 mod threadpool;
 use ncmdump::Ncmfile;
 
+const DEFAULT_MAXWORKER:usize = 8;
+
 fn main() {
     let timer = ncmdump::TimeCompare::new();
     // 初始化日志系统
@@ -37,7 +39,7 @@ fn main() {
                 1
             }
         }
-        None => 4,
+        None => DEFAULT_MAXWORKER,
     };
 
     let input = cli.input;

@@ -39,6 +39,8 @@ Options:
  - [x] 自动覆盖开关
 
 ---
+# [Changelog](CHANGELOG.md)
+---
 
 # 附 - ncm文件结构
 |信息|大小|作用|

@@ -49,3 +49,10 @@
 - 增加覆盖保存开关
 ### Refactoring
 - :hammer: 重构代码！使用mpsc进行线程通讯。
+
+
+## [2.5.10] - 2025.3.15
+### Features :sparkles:
+- 重新进度条支持！美观了不少啊
+### Refactoring
+- :hammer: 重构大量代码！

@@ -5,7 +5,7 @@ use clap::Parser;
 #[command(author = "lkhsss")]
 #[command(version,about = "一个解密ncm文件的神秘程序 By Lkhsss", long_about = None)]
 pub struct Cli {
-    /// 并发的最大线程数，默认为4线程
+    /// 并发的最大线程数，默认为8线程
     #[arg(short, long)]
     pub workers: Option<usize>,
     /// 需要解密的文件夹或文件
