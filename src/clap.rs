@@ -19,4 +19,8 @@ pub struct Cli {
     /// 强制覆盖保存开关
     #[arg(short, long, name = "强制覆盖开关")]
     pub forcesave: bool,
+
+    /// 自动打开输出目录
+    #[arg(short,long,name="自动打开输出目录")]
+    pub autoopen:bool,
 }

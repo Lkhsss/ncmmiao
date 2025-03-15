@@ -19,6 +19,7 @@ mod ncmdump;
 mod pathparse;
 mod test;
 mod threadpool;
+mod opendir;
 use ncmdump::Ncmfile;
 
 const DEFAULT_MAXWORKER:usize = 8;
@@ -118,7 +119,14 @@ fn main() {
         successful.to_string().bright_green(),
         (taskcount - successful).to_string().bright_red(),
         showtime()
-    )
+    );
+
+    // 自动打开输出文件夹
+    if cli.autoopen{
+        opendir::opendir(outputdir.into());
+    };
+
+
 }
 
 lazy_static! {
