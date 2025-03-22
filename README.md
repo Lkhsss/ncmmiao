@@ -22,9 +22,11 @@ cargo build -r
 ```
 ncmmiao [OPTIONS]
 Options:
-  -w, --workers <WORKERS>  最大线程数 约束逻辑在主函数
-  -i, --input <输入文件/文件夹>   需要解密的文件夹或文件
-  -o, --output <输出文件夹>     [默认: NcmmiaoOutput]
+  -w, --workers <WORKERS>  并发的最大线程数，默认为8线程(性能还行的话建议直接32-64，嘎嘎快)
+  -i, --input <输入文件/目录>    需要解密的文件夹或文件
+  -o, --output <输出目录>      输出目录 [default: NcmmiaoOutput]
+  -f, --forcesave          强制覆盖保存开关
+  -a, --autoopen           自动打开输出目录
 ```
 
 ~~输出文件夹在output。等我想写了再写命令行解析（bushi。~~ 写了写了

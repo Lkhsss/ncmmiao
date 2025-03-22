@@ -21,6 +21,6 @@ pub struct Cli {
     pub forcesave: bool,
 
     /// 自动打开输出目录
-    #[arg(short,long,name="自动打开输出目录")]
-    pub autoopen:bool,
+    #[arg(short, long, name = "自动打开输出目录")]
+    pub autoopen: bool,
 }

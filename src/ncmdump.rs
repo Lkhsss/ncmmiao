@@ -559,7 +559,7 @@ fn unpad(data: &[u8]) -> Vec<u8> {
     data[..data.len() - data[data.len() - 1] as usize].to_vec()
 }
 
-#[derive(Debug)]
+#[derive(Debug,PartialEq)]
 #[allow(dead_code)]
 pub enum NcmError {
     NotNcmFile,

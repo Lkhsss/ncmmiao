@@ -3,6 +3,7 @@ use colored::{Color, Colorize};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use log::{error, info, warn};
+use messager::Message;
 use std::time::Duration;
 use std::{
     path::Path,
@@ -16,13 +17,13 @@ mod clap;
 mod logger;
 mod messager;
 mod ncmdump;
+mod opendir;
 mod pathparse;
 mod test;
 mod threadpool;
-mod opendir;
 use ncmdump::Ncmfile;
 
-const DEFAULT_MAXWORKER:usize = 8;
+const DEFAULT_MAXWORKER: usize = 8;
 
 fn main() {
     let timer = ncmdump::TimeCompare::new();
@@ -54,7 +55,9 @@ fn main() {
     let undumpfile = pathparse::pathparse(input); // 该列表将存入文件的路径
 
     let taskcount = undumpfile.len();
-    let successful = Arc::new(Mutex::new(0));
+    let mut success_count = 0; //成功任务数
+
+
     if taskcount == 0 {
         error!("没有找到有效文件。使用-i参数输入需要解密的文件或文件夹。")
     } else {
@@ -70,17 +73,20 @@ fn main() {
         // 循环开始
         for filepath in undumpfile {
             let output = outputdir.clone();
-            let successful = Arc::clone(&successful);
-            let sender: Sender<messager::Message> = tx.clone();
+            let senderin: Sender<messager::Message> = tx.clone();
+            let senderon: Sender<messager::Message> = tx.clone();
             pool.execute(move || match Ncmfile::new(filepath.as_str()) {
-                Ok(mut n) => match n.dump(Path::new(&output), sender, forcesave) {
-                    Ok(_) => {
-                        let mut num = successful.lock().unwrap();
-                        *num += 1;
+                Ok(mut n) => match n.dump(Path::new(&output), senderin, forcesave) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        let messager = messager::Messager::new(n.fullfilename, senderon);
+                        messager.send(messager::Signals::Err(e));
                     }
-                    Err(e) => error!("[{}] 解密失败: {}", filepath.yellow(), e),
                 },
-                Err(e) => error!("[{}] 解密失败: {}", filepath.yellow(), e),
+                Err(e) => {
+                    let messager = messager::Messager::new(filepath, senderon);
+                    messager.send(messager::Signals::Err(e));
+                }
             });
         }
         //循环到此结束
@@ -96,13 +102,21 @@ fn main() {
             )
             .with_message("解密中");
         let progressbar = MP.add(pb);
-        //接受消息
 
+        //定义计数器
+        // 接受消息!!!!!!!!!!
         for messages in rx {
-            progressbar.inc(1);
-            messages.log(); //发送log
+            match messages.signal{
+                messager::Signals::End|messager::Signals::Err(_)=>{success_count+=1},
+                _=>()
+            }
+            if success_count < taskcount {
+                progressbar.inc(1);
+                messages.log(); //发送log
+            } else {
+                break;
+            }
         }
-
         progressbar.finish_and_clear();
     }
     let timecount = timer.compare();
@@ -113,20 +127,20 @@ fn main() {
             format!("共计用时{}毫秒", timecount)
         }
     };
-    let successful = *successful.lock().unwrap();
     info!(
         "成功解密{}个文件,{}个文件解密失败，{}",
-        successful.to_string().bright_green(),
-        (taskcount - successful).to_string().bright_red(),
+        success_count.to_string().bright_green(),
+        (taskcount - success_count).to_string().bright_red(),
         showtime()
     );
 
     // 自动打开输出文件夹
-    if cli.autoopen{
+    if cli.autoopen {
+        info!("自动打开文件夹：[{}]", outputdir.cyan());
         opendir::opendir(outputdir.into());
+    } else {
+        info!("输出文件夹：[{}]", outputdir.cyan());
     };
-
-
 }
 
 lazy_static! {
