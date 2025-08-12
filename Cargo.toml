@@ -6,20 +6,20 @@ authors = ["Lkhsss <lkhsss1019@gmail.com>"]
 description = "A magic tool convert ncm to flac"
 repository = "https://github.com/lkhsss/ncmmiao"
 license = "GPL-3.0-or-later"
-keywords = ["ncm","flac","neteasemusic"]
+keywords = ["ncm", "flac", "neteasemusic"]
 
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 aes = { version = "0.8.4", default-features = false }
-audiotags = {version = "0.5.0",default-features = false}
-base64 = {version = "0.22.*"}
-chrono = {version = "0.4.*",features = ["clock"],default-features = false}
-clap = { version = "4.5.*", features = ["derive","std"]}
-colored = {version = "3.0.0",default-features = false}
+audiotags = { version = "0.5.0", default-features = false }
+base64 = { version = "0.22.*" }
+chrono = { version = "0.4.*", features = ["clock"], default-features = false }
+clap = { version = "4.5.*", features = ["derive", "std"] }
+colored = { version = "3.0.0", default-features = false }
 crossbeam-channel = "0.5.15"
-env_logger = {version = "0.11.7",default-features = false}
+env_logger = { version = "0.11.7", default-features = false }
 image = "0.25.*"
 indicatif = "0.17.9"
 lazy_static = "1.5.0"
@@ -37,6 +37,6 @@ maintenance = { status = "actively-developed" }
 #缩小编译后体积
 strip = true
 # strip = "debuginfo" #仅移除debug信息
-lto = true #启用链接时间优化
+lto = true      #启用链接时间优化
 panic = "abort" #panic时直接abort
 opt-level = "z" #优化级别
