@@ -1,3 +1,4 @@
+use crate::apperror::AppError;
 use crate::messager;
 use aes::cipher::generic_array::typenum::U16;
 use aes::cipher::{generic_array::GenericArray, BlockDecrypt, KeyInit};
@@ -5,8 +6,6 @@ use aes::Aes128;
 use audiotags::{MimeType, Picture, Tag};
 use base64::{self, Engine};
 use colored::*;
-use hex::decode;
-use lazy_static::lazy_static;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use messager::Signals;
@@ -20,14 +19,16 @@ use std::str::from_utf8;
 use std::sync::mpsc;
 use std::vec;
 
-use std::time::{SystemTime, UNIX_EPOCH};
+// lazy_static! {
+//     // 解密需要的密钥
+//     static ref KEY_CORE: Vec<u8> = decode("687A4852416D736F356B496E62617857").unwrap();//绝对正确
+//     static ref KEY_META: Vec<u8> = decode("2331346C6A6B5F215C5D2630553C2728").unwrap();
+// }
 
-lazy_static! {
-    // 解密需要的密钥
-    static ref KEY_CORE: Vec<u8> = decode("687A4852416D736F356B496E62617857").unwrap();
-    static ref KEY_META: Vec<u8> = decode("2331346C6A6B5F215C5D2630553C2728").unwrap();
-}
-
+// 原KEY_CORE数据：687A4852416D736F356B496E62617857
+const NEW_KEY_CORE:[u8;16] = [0x68, 0x7A, 0x48, 0x52, 0x41, 0x6D, 0x73, 0x6F, 0x35, 0x6B, 0x49, 0x6E, 0x62, 0x61, 0x78, 0x57];
+// 原KEY_META数据：2331346C6A6B5F215C5D2630553C2728
+const NEW_KEY_META:[u8;16]=[0x23, 0x31, 0x34, 0x6C, 0x6A, 0x6B, 0x5F, 0x21, 0x5C, 0x5D, 0x26, 0x30, 0x55, 0x3C, 0x27, 0x28];
 #[derive(Debug)]
 #[allow(unused_variables)]
 pub struct Ncmfile {
@@ -42,18 +43,28 @@ pub struct Ncmfile {
     /// 游标
     pub position: u64,
 }
+
 impl Ncmfile {
-    pub fn new(filepath: &str) -> Result<Ncmfile, NcmError> {
+    /// 各种工具方法
+    pub fn new(filepath: &str) -> Result<Ncmfile, AppError> {
         let file = match File::open(filepath) {
             Ok(f) => f,
-            Err(_) => return Err(NcmError::FileReadError),
+            Err(_) => return Err(AppError::FileReadError),
         };
         let path = Path::new(filepath);
-        let fullfilename = path.file_name().unwrap().to_str().unwrap().to_string();
-        let size = file.metadata().unwrap().len();
+        let fullfilename = path
+            .file_name()
+            .ok_or(AppError::FileReadError)?
+            .to_str()
+            .ok_or(AppError::FileReadError)?
+            .to_string();
+        let size = file
+            .metadata()
+            .map_err(|_| AppError::CannotReadMetaInfo)?
+            .len();
         let filename = match Path::new(&filepath).file_stem() {
-            Some(f) => f.to_str().unwrap().to_string(),
-            None => return Err(NcmError::CannotReadFileName),
+            Some(f) => f.to_str().ok_or(AppError::FileReadError)?.to_string(),
+            None => return Err(AppError::CannotReadFileName),
         };
         Ok(Ncmfile {
             file,
@@ -67,9 +78,9 @@ impl Ncmfile {
     ///
     /// 该函数可以记录上次读取的位置，下次读取时从上次读取的位置开始
     /// - length 想要读取的长度
-    pub fn seekread(&mut self, length: u64) -> Result<Vec<u8>, NcmError> {
+    pub fn seekread(&mut self, length: u64) -> Result<Vec<u8>, AppError> {
         if self.position + length > self.size {
-            return Err(NcmError::FileReadError);
+            return Err(AppError::FileReadError);
         } else {
             let mut reader = BufReader::new(&self.file);
             let _ = reader.seek(SeekFrom::Start(self.position));
@@ -79,6 +90,7 @@ impl Ncmfile {
             Ok(buf[..].to_vec())
         }
     }
+
     /// 从指定位置开始读取。
     ///
     /// ！！！该函数仍然会更新游标
@@ -86,9 +98,9 @@ impl Ncmfile {
     /// - offset 开始位置
     /// - length 想要读取的长度
     #[allow(dead_code)]
-    pub fn seekread_from(&mut self, offset: u64, length: u64) -> Result<Vec<u8>, NcmError> {
+    pub fn seekread_from(&mut self, offset: u64, length: u64) -> Result<Vec<u8>, AppError> {
         if self.position + length > self.size {
-            return Err(NcmError::FileReadError);
+            return Err(AppError::FileReadError);
         } else {
             let mut reader = BufReader::new(&self.file);
             let _ = reader.seek(SeekFrom::Start(offset));
@@ -130,9 +142,9 @@ impl Ncmfile {
         }
     }
     /// 跳过某些数据
-    pub fn skip(&mut self, length: u64) -> Result<(), NcmError> {
+    pub fn skip(&mut self, length: u64) -> Result<(), AppError> {
         if self.position + length > self.size {
-            return Err(NcmError::FileReadError);
+            return Err(AppError::FileReadError);
         } else {
             self.position += length;
             Ok(())
@@ -146,6 +158,35 @@ impl Ncmfile {
         key
     }
 
+    fn save(&mut self, path: &PathBuf, data: Vec<u8>) -> Result<(), AppError> {
+        let music_file = match File::create(path) {
+            Ok(o) => o,
+            Err(_) => return Err(AppError::FileWriteError),
+        };
+        let mut writer = BufWriter::new(music_file);
+        let _ = writer.write_all(&data);
+        // 关闭文件
+        match writer.flush() {
+            Ok(o) => o,
+            Err(_) => return Err(AppError::FileWriteError),
+        };
+        Ok(())
+    }
+    fn is_ncm(data: Vec<u8>) -> Result<(), AppError> {
+        let header = from_utf8(&data).map_err(|_| AppError::NotNcmFile)?;
+        if header != "CTENFDAM" {
+            return Err(AppError::NotNcmFile);
+        } else {
+            Ok(())
+        }
+    }
+    /// 使用PKCS5Padding标准，去掉填充信息
+    fn unpad(data: &[u8]) -> Vec<u8> {
+        data[..data.len() - data[data.len() - 1] as usize].to_vec()
+    }
+}
+
+impl Ncmfile {
     /// 解密函数
     #[allow(unused_assignments)]
     pub fn dump(
@@ -153,30 +194,18 @@ impl Ncmfile {
         outputdir: &Path,
         tx: mpsc::Sender<messager::Message>,
         force_save: bool,
-    ) -> Result<(), NcmError> {
+    ) -> Result<(), AppError> {
         let messager = messager::Messager::new(self.fullfilename.clone(), tx);
         let _ = messager.send(Signals::Start);
         //TODO 通讯合法化
         // info!("开始解密[{}]文件", self.fullfilename.yellow());
-        // 获取magic header 。应为CTENFDAM
-        let magic_header = match self.seekread(8) {
-            Ok(header) => header,
-            Err(_e) => {
-                return Err(NcmError::FileReadError); //TODO去除向上传播
-            }
-        };
+        // 获取magic header   应为CTENFDAM
+        trace!("读取magic header");
+        let magic_header = self.seekread(8)?;
 
         // 判断是否为ncm格式的文件
-        match from_utf8(&magic_header) {
-            Ok(header) => {
-                if header != "CTENFDAM" {
-                    // 传播错误至dump
-                    return Err(NcmError::NotNcmFile);
-                }
-            }
-            // 传播错误至dump
-            Err(_e) => return Err(NcmError::NotNcmFile),
-        }
+        trace!("判断是否为ncm格式的文件");
+        Self::is_ncm(magic_header)?;
 
         // 跳过2字节
         trace!("跳过2字节");
@@ -184,20 +213,28 @@ impl Ncmfile {
 
         trace!("获取RC4密钥长度");
         //小端模式读取RC4密钥长度 正常情况下应为128
-        let key_length = u32::from_le_bytes(self.seekread(4).unwrap().try_into().unwrap()) as u64;
+        let key_length = u32::from_le_bytes(
+            self.seekread(4)?
+                .try_into()
+                .map_err(|_| AppError::FileReadError)?,
+        ) as u64;//数据长度不够只能使用u32 然后转化为u64
         // debug!("RC4密钥长度为：{}", key_length);
 
         //读取密钥 开头应为 neteasecloudmusic
         trace!("读取RC4密钥");
-        let mut key_data = self.seekread(key_length).unwrap();
+        let mut key_data = self.seekread(key_length)?;
         //aes128解密
-        let key_data = &aes128_to_slice(&KEY_CORE, Self::parse_key(&mut key_data[..])); //先把密钥按照字节进行0x64异或
-                                                                                        // RC4密钥
-        let key_data = unpad(&key_data[..])[17..].to_vec(); //去掉neteasecloudmusic
+        let key_data = &aes128_to_slice(&NEW_KEY_CORE, Self::parse_key(&mut key_data[..]).to_vec())?; //先把密钥按照字节进行0x64异或
+                                                                                                   // RC4密钥
+        let key_data = Self::unpad(&key_data[..])[17..].to_vec(); //去掉neteasecloudmusic
 
         //读取meta信息的数据大小
         trace!("获取meta信息数据大小");
-        let meta_length = u32::from_le_bytes(self.seekread(4)?.try_into().unwrap()) as u64;
+        let meta_length = u32::from_le_bytes(
+            self.seekread(4)?
+                .try_into()
+                .map_err(|_| AppError::FileDataError)?,
+        ) as u64;
         let _ = messager.send(Signals::GetMetaInfo);
 
         // 读取meta信息
@@ -213,20 +250,20 @@ impl Ncmfile {
             let _ = match &base64::engine::general_purpose::STANDARD
                 .decode_vec(&mut meta_data[22..], &mut decode_data)
             {
-                Err(_) => return Err(NcmError::CannotReadMetaInfo),
+                Err(_) => return Err(AppError::CannotReadMetaInfo),
                 _ => (),
             };
             // aes128解密
-            let aes_data = aes128_to_slice(&KEY_META, &decode_data);
+            let aes_data = aes128_to_slice(&NEW_KEY_META, decode_data)?;
             // unpadding
-            let json_data = match String::from_utf8(unpad(&aes_data)[6..].to_vec()) {
+            let json_data = match String::from_utf8(Self::unpad(&aes_data)[6..].to_vec()) {
                 Ok(o) => o,
-                Err(_) => return Err(NcmError::CannotReadMetaInfo),
+                Err(_) => return Err(AppError::CannotReadMetaInfo),
             };
             debug!("json_data: {}", json_data);
             let data: Value = match serde_json::from_str(&json_data[..]) {
                 Ok(o) => o,
-                Err(_) => return Err(NcmError::CannotReadMetaInfo),
+                Err(_) => return Err(AppError::CannotReadMetaInfo),
             }; //解析json数据
             data
         };
@@ -237,14 +274,18 @@ impl Ncmfile {
             let filename = format!(
                 "{}.{}",
                 self.filename,
-                meta_data.get("format").unwrap().as_str().unwrap()
+                meta_data
+                    .get("format")
+                    .ok_or(AppError::CannotReadMetaInfo)?
+                    .as_str()
+                    .ok_or(AppError::CannotReadMetaInfo)?
             );
 
             // let filename = standardize_filename(filename);
             debug!("文件名：{}", filename.yellow());
             //链级创建输出目录
             match fs::create_dir_all(outputdir) {
-                Err(_) => return Err(NcmError::FileWriteError),
+                Err(_) => return Err(AppError::FileWriteError),
                 _ => (),
             };
             outputdir.join(filename)
@@ -254,12 +295,13 @@ impl Ncmfile {
 
         // 先检查是否存在
         if !force_save && Path::new(&path).exists() {
-            return Err(NcmError::ProtectFile);
+            return Err(AppError::ProtectFile);
         }
 
         // 跳过4个字节的校验码
-        trace!("读取校验码");
-        // let _crc32 = u32::from_le_bytes(self.seekread(4).unwrap().try_into().unwrap()) as u64;
+        // trace!("读取校验码");
+        // let _crc32 = u32::from_le_bytes(self.seekread(4)?.try_into().map_err(AppError::FileDataError)?) as u64;
+
         self.skip(4)?;
 
         // 跳过5个字节
@@ -269,7 +311,11 @@ impl Ncmfile {
         let _ = messager.send(Signals::GetCover);
         // 获取图片数据的大小
         trace!("获取图片数据的大小");
-        let image_data_length = u32::from_le_bytes(self.seekread(4)?.try_into().unwrap()) as u64;
+        let image_data_length = u32::from_le_bytes(
+            self.seekread(4)?
+                .try_into()
+                .map_err(|_| AppError::FileDataError)?,
+        ) as u64;
 
         // 读取图片，并写入文件当中
         let image_data = self.seekread(image_data_length)?; //读取图片数据
@@ -298,26 +344,6 @@ impl Ncmfile {
             key_box
         };
 
-        /* let mut s_box = {
-            let key_length = key_data.len();
-            let key_box = Vec::from(key_data);
-            let mut s = (0..=255).collect::<Vec<u8>>();
-            let mut j = 0;
-
-            for i in 0..=255 {
-                j = (j as usize + s[i] as usize + key_box[i % key_length] as usize) & 0xFF;
-
-                //记录 s[j]的值
-                let temp = &s.get(j as usize).unwrap().to_owned();
-                s[j as usize] = s[i];
-                s[i] = temp.to_owned();
-            }
-
-            s
-        }; */
-
-        // let key_box = key_box[0..(key_box.len()-key_box[key_box.len() as usize-1] as usize)].to_vec();
-
         //解密音乐数据
         trace!("解密音乐数据");
         let _ = messager.send(Signals::Decrypt);
@@ -342,28 +368,6 @@ impl Ncmfile {
             }
         }
 
-        //组成流密钥
-        /* let mut stream = Vec::new();
-        for i in 0..256 {
-            stream.push(
-                s_box[(s_box[i] as usize + s_box[(i + s_box[i] as usize) & 0xFF] as usize) & 0xFF],
-            )
-        } */
-
-        // 解密音乐数据
-        /* loop {
-            let chunk = self.seekread_no_error(256); //每次读取256个字节
-            if chunk.len() != 0 {
-                for (count, &i) in chunk[..].iter().enumerate() {
-                    music_data.push(i ^ stream[count])
-                }
-            } else {
-                break;
-            }
-        } */
-        // debug!("music_data：{:?}", music_data);
-        // debug!("长度：{}", stream.len());
-
         //退出循环，写入文件
 
         let _ = messager.send(Signals::Save);
@@ -373,20 +377,22 @@ impl Ncmfile {
             // 保存封面
             let mut tag = match Tag::new().read_from_path(&path) {
                 Ok(o) => o,
-                Err(_) => return Err(NcmError::CoverCannotSave),
+                Err(_) => return Err(AppError::CoverCannotSave),
             };
             let cover = Picture {
                 mime_type: MimeType::Jpeg,
                 data: &image_data,
             };
             tag.set_album_cover(cover); //添加封面
-            let _ = tag.write_to_path(&path.to_str().unwrap()); //保存
+            let _ = tag
+                .write_to_path(&path.to_str().ok_or(AppError::SaveError)?)
+                .map_err(|_| AppError::SaveError); //保存
         }
 
         info!(
             "[{}] 文件已保存到: {}",
             self.filename.yellow(),
-            path.to_str().unwrap().bright_cyan()
+            path.to_str().ok_or(AppError::SaveError)?.bright_cyan()
         );
         info!(
             "[{}]{}",
@@ -394,20 +400,6 @@ impl Ncmfile {
             "解密成功".bright_green()
         );
         let _ = messager.send(Signals::End);
-        Ok(())
-    }
-    fn save(&mut self, path: &PathBuf, data: Vec<u8>) -> Result<(), NcmError> {
-        let music_file = match File::create(path) {
-            Ok(o) => o,
-            Err(_) => return Err(NcmError::FileWriteError),
-        };
-        let mut writer = BufWriter::new(music_file);
-        let _ = writer.write_all(&data);
-        // 关闭文件
-        match writer.flush() {
-            Ok(o) => o,
-            Err(_) => return Err(NcmError::FileWriteError),
-        };
         Ok(())
     }
 }
@@ -470,54 +462,26 @@ pub struct Key {
 
 // fn read_meta(file: &mut File, meta_length: u32) -> Result<Vec<u8>, Error> {}
 
-fn convert_to_generic_arrays(input: &[u8]) -> Vec<GenericArray<u8, U16>> {
+fn convert_to_generic_arrays(input: &[u8]) -> Result<Vec<GenericArray<u8, U16>>, AppError> {
     // 确保输入的长度是16的倍数
-    assert!(
-        input.len() % 16 == 0,
-        "Input length must be a multiple of 16"
-    );
+    if input.len() % 16 == 0 {}
 
-    input
+    Ok(input
         .chunks(16)
         .map(|chunk| {
             // 将每个块转换为GenericArray
             GenericArray::clone_from_slice(chunk)
         })
-        .collect()
-}
-/// aes128解密
-/// ！！！未对齐数据！！！
-/// TODO
-/// 解密NCM文件的rc4密钥前记得按字节对0x64进行异或
-#[allow(dead_code)]
-fn aes128(key: &[u8], blocks: &[u8]) -> String {
-    trace!("进行AES128解密");
-    let key = GenericArray::from_slice(key);
-
-    let mut blocks = convert_to_generic_arrays(blocks);
-
-    // 初始化密钥
-    let cipher = Aes128::new(&key);
-
-    // 开始解密
-    cipher.decrypt_blocks(&mut blocks);
-
-    let mut x = String::new();
-    for block in blocks.iter() {
-        x.push_str(std::str::from_utf8(&block).unwrap())
-    }
-    // 去除所有空格及控制字符
-    let x = x[..].trim();
-
-    x.to_string()
+        .collect())
 }
 
 /// ## AES128解密
-fn aes128_to_slice(key: &[u8], blocks: &[u8]) -> Vec<u8> {
+/// 解密NCM文件的rc4密钥前记得按字节对0x64进行异或
+fn aes128_to_slice<T: AsRef<[u8]>>(key: &T, blocks: Vec<u8>) -> Result<Vec<u8>, AppError> {
     trace!("进行AES128解密");
-    let key = GenericArray::from_slice(key);
+    let key = GenericArray::from_slice(key.as_ref());
 
-    let mut blocks = convert_to_generic_arrays(blocks);
+    let mut blocks = convert_to_generic_arrays(&blocks)?;
 
     // 初始化密钥
     let cipher = Aes128::new(&key);
@@ -532,7 +496,7 @@ fn aes128_to_slice(key: &[u8], blocks: &[u8]) -> Vec<u8> {
             x.push(i.to_owned());
         }
     }
-    x
+    Ok(x.into())
 }
 
 /// ## 规范文件名称
@@ -552,67 +516,4 @@ fn standardize_filename(old_fullfilename: String) -> String {
             new_fullfilename.replace(&standard[i].to_string(), &resolution[i].to_string());
     }
     new_fullfilename
-}
-
-/// 使用PKCS5Padding标准，去掉填充信息
-fn unpad(data: &[u8]) -> Vec<u8> {
-    data[..data.len() - data[data.len() - 1] as usize].to_vec()
-}
-
-#[derive(Debug,PartialEq)]
-#[allow(dead_code)]
-pub enum NcmError {
-    NotNcmFile,
-    CannotReadFileName,
-    CannotReadMetaInfo,
-    CoverCannotSave,
-    FileReadError,
-    FileSkipError,
-    FileWriteError,
-    FullFilenameError,
-    FileNotFound,
-    ProtectFile,
-}
-
-impl std::error::Error for NcmError {}
-
-impl std::fmt::Display for NcmError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Self::NotNcmFile => write!(f, "该文件不为NCM格式"),
-            Self::CannotReadFileName => write!(f, "无法读取文件名称"),
-            Self::CannotReadMetaInfo => write!(f, "无法读取歌曲元信息"),
-            Self::CoverCannotSave => write!(f, "封面无法保存"),
-
-            Self::FileReadError => write!(f, "读取文件时发生错误"),
-            Self::FileWriteError => write!(f, "写入文件时错误"),
-            Self::FullFilenameError => write!(f, "文件名不符合规范"),
-            Self::ProtectFile => write!(
-                f,
-                "已关闭文件强制覆盖且文件已存在。使用-f或-forcesave开启强制覆盖。"
-            ),
-            _ => write!(f, "未知错误"),
-        }
-    }
-}
-
-#[allow(dead_code)]
-pub struct TimeCompare(u128);
-
-impl TimeCompare {
-    pub fn new() -> Self {
-        Self(
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_millis(),
-        )
-    }
-    pub fn compare(&self) -> u128 {
-        let time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis();
-        time - self.0
-    }
 }

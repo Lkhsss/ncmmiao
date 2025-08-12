@@ -1,4 +1,4 @@
-use colored::Color::{Blue, Cyan, Green, Red, Yellow};
+use colored::Color::{Cyan, Green, Red, Yellow,Magenta};
 use colored::Colorize;
 use indicatif::MultiProgress;
 use log::{LevelFilter, Log, Metadata, Record, SetLoggerError};
@@ -20,8 +20,8 @@ impl Log for MultiProgressLogger {
                 log::Level::Error => ("Error").color(Red),
                 log::Level::Warn => ("Warn").color(Yellow),
                 log::Level::Info => ("Info").color(Green),
-                log::Level::Debug => ("Debug").color(Blue),
-                log::Level::Trace => ("Debug").color(Cyan),
+                log::Level::Debug => ("Debug").color(Magenta),
+                log::Level::Trace => ("Trace").color(Cyan),
             };
             let message = format!(
                 "[{}][{}] {}",
@@ -43,7 +43,7 @@ pub fn init_logger() -> Result<(), SetLoggerError> {
     };
     log::set_boxed_logger(Box::new(logger))?;
     if cfg!(debug_assertions) {
-        log::set_max_level(LevelFilter::Debug);
+        log::set_max_level(LevelFilter::Trace);//FIXME
     } else {
         log::set_max_level(LevelFilter::Info);
     }

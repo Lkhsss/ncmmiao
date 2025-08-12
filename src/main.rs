@@ -1,9 +1,12 @@
+#![deny(clippy::all)]
 use ::clap::Parser;
 use colored::{Color, Colorize};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
-use log::{error, info, warn};
+use log::{error, info, trace, warn};
 use messager::Message;
+use rayon::ThreadPoolBuilder;
+use std::process::exit;
 use std::time::Duration;
 use std::{
     path::Path,
@@ -13,6 +16,7 @@ use std::{
     },
 };
 
+mod apperror;
 mod clap;
 mod logger;
 mod messager;
@@ -21,14 +25,27 @@ mod opendir;
 mod pathparse;
 mod test;
 mod threadpool;
+mod time;
+use apperror::AppError;
 use ncmdump::Ncmfile;
-
+use time::TimeCompare;
 const DEFAULT_MAXWORKER: usize = 8;
 
-fn main() {
-    let timer = ncmdump::TimeCompare::new();
+fn main() -> Result<(), AppError> {
+    let timer = match TimeCompare::new() {
+        Ok(t) => t,
+        Err(e) => {
+            error!("无法初始化时间戳系统。{}", e);
+            exit(1)
+        }
+    };
     // 初始化日志系统
-    logger::init_logger().unwrap();
+    match logger::init_logger() {
+        Ok(_) => (),
+        Err(_) => {
+            println!("初始化日志系统失败")
+        }
+    };
 
     let cli = clap::Cli::parse();
 
@@ -43,10 +60,11 @@ fn main() {
         }
         None => DEFAULT_MAXWORKER,
     };
-
+    //输入目录
     let input = cli.input;
-
-    let outputdir = cli.output.unwrap();
+    //输出目录
+    let outputdir = cli.output;
+    // 强制覆盖
     let forcesave = cli.forcesave;
     if forcesave {
         warn!("文件{}已开启！", "强制覆盖".bright_red())
@@ -57,69 +75,78 @@ fn main() {
     let taskcount = undumpfile.len();
     let mut success_count = 0; //成功任务数
 
-
     if taskcount == 0 {
-        error!("没有找到有效文件。使用-i参数输入需要解密的文件或文件夹。")
-    } else {
-        // 初始化线程池
-        let pool = threadpool::Pool::new(max_workers);
-        info!(
-            "将启用{}线程",
-            max_workers.to_string().color(Color::BrightGreen)
-        );
-        // 初始化通讯
-        let (tx, rx) = mpsc::channel();
+        error!("没有找到有效文件。使用-i参数输入需要解密的文件或文件夹。");
+        exit(2);
+    };
+    // 初始化线程池
+    let pool = threadpool::Pool::new(max_workers);
+    // let threadpoolbuilder = ThreadPoolBuilder::new()
+    //     .num_threads(max_workers)
+    //     .build()
+    //     .unwrap(); //初始化线程池
+    //                //FIXME暂时unwrap
+    info!(
+        "将启用{}线程",
+        max_workers.to_string().color(Color::BrightGreen)
+    );
+    // 初始化通讯
+    let (tx, rx) = mpsc::channel();
 
-        // 循环开始
-        for filepath in undumpfile {
-            let output = outputdir.clone();
-            let senderin: Sender<messager::Message> = tx.clone();
-            let senderon: Sender<messager::Message> = tx.clone();
-            pool.execute(move || match Ncmfile::new(filepath.as_str()) {
-                Ok(mut n) => match n.dump(Path::new(&output), senderin, forcesave) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        let messager = messager::Messager::new(n.fullfilename, senderon);
-                        messager.send(messager::Signals::Err(e));
-                    }
-                },
+    // 循环开始
+    for filepath in undumpfile {
+        let output = outputdir.clone();
+        let senderin: Sender<messager::Message> = tx.clone();
+        let senderon: Sender<messager::Message> = tx.clone();
+        // 多线程
+        pool.execute(move || match Ncmfile::new(filepath.as_str()) {
+            Ok(mut n) => match n.dump(Path::new(&output), senderin, forcesave) {
+                Ok(_) => {}
                 Err(e) => {
-                    let messager = messager::Messager::new(filepath, senderon);
-                    messager.send(messager::Signals::Err(e));
+                    let messager = messager::Messager::new(n.fullfilename, senderon);
+                    let _ = messager.send(messager::Signals::Err(e));
                 }
-            });
-        }
-        //循环到此结束
-        //进度条
-
-        let pb = ProgressBar::new((taskcount * 6) as u64) //长度乘积取决于Signal的数量
-            .with_elapsed(Duration::from_millis(50))
-            .with_style(
-                ProgressStyle::default_bar()
-                    .progress_chars("#>-")
-                    .template("{spinner:.green} [{wide_bar:.cyan/blue}] {percent_precise}% ({eta})")
-                    .unwrap(),
-            )
-            .with_message("解密中");
-        let progressbar = MP.add(pb);
-
-        //定义计数器
-        // 接受消息!!!!!!!!!!
-        for messages in rx {
-            match messages.signal{
-                messager::Signals::End|messager::Signals::Err(_)=>{success_count+=1},
-                _=>()
+            },
+            Err(e) => {
+                let messager = messager::Messager::new(filepath, senderon);
+                let _ = messager.send(messager::Signals::Err(e));
             }
-            if success_count < taskcount {
-                progressbar.inc(1);
-                messages.log(); //发送log
-            } else {
-                break;
-            }
-        }
-        progressbar.finish_and_clear();
+        });
+        // threadpoolbuilder.install(|| {
+        //     //TODO
+        // })
     }
-    let timecount = timer.compare();
+    //循环到此结束
+    //进度条
+
+    let pb = ProgressBar::new((taskcount * 6) as u64) //长度乘积取决于Signal的数量
+        .with_elapsed(Duration::from_millis(50))
+        .with_style(
+            ProgressStyle::default_bar()
+                .progress_chars("#>-")
+                .template("{spinner:.green} [{wide_bar:.cyan/blue}] {percent_precise}% ({eta})")
+                .unwrap(),
+        )
+        .with_message("解密中");
+    let progressbar = MP.add(pb);
+
+    //定义计数器
+    // 接受消息!!!!!!!!!!
+    for messages in rx {
+        match messages.signal {
+            messager::Signals::End | messager::Signals::Err(_) => success_count += 1,
+            _ => (),
+        }
+        if success_count < taskcount {
+            progressbar.inc(1);
+            messages.log(); //发送log
+        } else {
+            break;
+        }
+    }
+    progressbar.finish_and_clear();
+
+    let timecount = timer.compare().unwrap();
     let showtime = || {
         if timecount > 2000 {
             format!("共计用时{}秒", timecount / 1000)
@@ -141,6 +168,7 @@ fn main() {
     } else {
         info!("输出文件夹：[{}]", outputdir.cyan());
     };
+    Ok(())
 }
 
 lazy_static! {

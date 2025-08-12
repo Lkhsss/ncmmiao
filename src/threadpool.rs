@@ -19,11 +19,11 @@ impl Worker {
             let message = receiver.lock().unwrap().recv().unwrap();
             match message {
                 Message::NewJob(job) => {
-                    debug!("线程[{}]获得任务", id);
+                    // debug!("线程[{}]获得任务", id);
                     job();
                 }
                 Message::ByeBye => {
-                    debug!("线程[{}]结束任务", id);
+                    // debug!("线程[{}]结束任务", id);
                     break;
                 }
             }

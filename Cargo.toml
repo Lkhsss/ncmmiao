@@ -19,11 +19,11 @@ chrono = {version = "0.4.*",features = ["clock"],default-features = false}
 clap = { version = "4.5.*", features = ["derive","std"]}
 colored = {version = "3.0.0",default-features = false}
 env_logger = {version = "0.11.7",default-features = false}
-hex = "0.4.3"
 image = "0.25.*"
 indicatif = "0.17.9"
 lazy_static = "1.5.0"
 log = "0.4.20"
+rayon = "1.10.0"
 serde = { version = "1.0.195", features = ["derive"] }
 serde_derive = "1.0.195"
 serde_json = "1.0.111"

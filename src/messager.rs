@@ -1,7 +1,7 @@
 use colored::Colorize;
 use log::{error, info, warn};
 
-use crate::{messager, ncmdump};
+use crate::{messager, ncmdump,AppError};
 use std::fmt::Debug;
 use std::sync::mpsc;
 pub struct Messager {
@@ -23,16 +23,15 @@ impl Message {
             Signals::Decrypt => "解密歌曲信息",
             Signals::Save => "保存文件",
             Signals::End => "成功!",
-            Signals::Err(e)=>&e.to_string(),
+            Signals::Err(e) => &e.to_string(),
         };
-        match &self.signal{
-            Signals::Err(e)=>{match e{
-                ncmdump::NcmError::ProtectFile=>warn!("[{}] {}", self.name.cyan(), loginfo),
-                _=>error!("[{}] {}", self.name.cyan(), loginfo),
-            }},
-            _=>info!("[{}] {}", self.name.cyan(), loginfo)
+        match &self.signal {
+            Signals::Err(e) => match e {
+                AppError::ProtectFile => warn!("[{}] {}", self.name.cyan(), loginfo),
+                _ => error!("[{}] {}", self.name.cyan(), loginfo),
+            },
+            _ => info!("[{}] {}", self.name.cyan(), loginfo),
         }
-        
     }
 }
 #[derive(PartialEq)]
@@ -43,7 +42,7 @@ pub enum Signals {
     Decrypt,
     Save,
     End,
-    Err(ncmdump::NcmError),
+    Err(AppError),
 }
 
 impl Messager {
@@ -66,8 +65,7 @@ impl Debug for Message {
             Signals::End => "破解完成",
             Signals::GetMetaInfo => "获取元数据",
             Signals::GetCover => "获取封面",
-            Signals::Err(e)=>&e.to_string(),
-
+            Signals::Err(e) => &e.to_string(),
         };
         write!(f, "[{}] {}", self.name, message)
     }

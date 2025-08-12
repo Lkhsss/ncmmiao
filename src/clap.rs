@@ -14,7 +14,7 @@ pub struct Cli {
 
     /// 输出目录
     #[arg(short, long, name = "输出目录", default_value = "NcmmiaoOutput")]
-    pub output: Option<String>,
+    pub output: String,
 
     /// 强制覆盖保存开关
     #[arg(short, long, name = "强制覆盖开关")]
