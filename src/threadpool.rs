@@ -58,8 +58,8 @@ impl Pool {
         }
 
         Pool {
-            workers: workers,
-            max_workers: max_workers,
+            workers,
+            max_workers,
             sender: tx,
         }
     }

@@ -1,8 +1,6 @@
-use log::{debug, error, warn};
+use log::{debug, error};
 use std::path::Path;
 use walkdir::WalkDir;
-
-use crate::apperror::AppError;
 
 pub fn pathparse(input: Vec<String>) -> Vec<String> {
     let mut undumpfile = Vec::new(); // 该列表将存入文件的路径

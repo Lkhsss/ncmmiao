@@ -68,3 +68,15 @@
 - 修正了解密完成后不会自动退出的bug
 ### Refactoring
 - :hammer: 重构部分代码！
+
+## [2.7.20] - 2025.8.12
+### Features :sparkles:
+ - 修改默认线程数为cpu核心数
+ - 修改多线程通信为crossbeam-channel库，增加通讯性能
+### Fixed :bug:
+ - :arrow_up: 升级依赖
+ - 修正了trace级别日志输出时显示debug级别的问题
+### Refactoring
+ - :hammer: 优雅处理所有的错误
+ - :hammer: 将代码分离为单个文件
+ - :hammer: 优化解密算法，提高解密效率

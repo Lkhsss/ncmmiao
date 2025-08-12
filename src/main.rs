@@ -1,20 +1,13 @@
-#![deny(clippy::all)]
 use ::clap::Parser;
 use colored::{Color, Colorize};
+use crossbeam_channel::{bounded, Sender};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
-use log::{error, info, trace, warn};
-use messager::Message;
-use rayon::ThreadPoolBuilder;
+use log::{error, info, warn, LevelFilter};
+use messager::{Message, Messager, Signals};
 use std::process::exit;
 use std::time::Duration;
-use std::{
-    path::Path,
-    sync::{
-        mpsc::{self, Sender},
-        Arc, Mutex,
-    },
-};
+use std::{path::Path, sync::Arc};
 
 mod apperror;
 mod clap;
@@ -29,7 +22,7 @@ mod time;
 use apperror::AppError;
 use ncmdump::Ncmfile;
 use time::TimeCompare;
-const DEFAULT_MAXWORKER: usize = 8;
+
 
 fn main() -> Result<(), AppError> {
     let timer = match TimeCompare::new() {
@@ -49,6 +42,8 @@ fn main() -> Result<(), AppError> {
 
     let cli = clap::Cli::parse();
 
+    //获取cpu核心数
+    let cpus = num_cpus::get();
     // 最大线程数
     let max_workers = match cli.workers {
         Some(n) => {
@@ -58,7 +53,7 @@ fn main() -> Result<(), AppError> {
                 1
             }
         }
-        None => DEFAULT_MAXWORKER,
+        None => cpus,//默认使用cpu核心数作为线程数
     };
     //输入目录
     let input = cli.input;
@@ -69,11 +64,23 @@ fn main() -> Result<(), AppError> {
     if forcesave {
         warn!("文件{}已开启！", "强制覆盖".bright_red())
     }
+    let level = match cli.debug {
+        0 | 3 => LevelFilter::Info,
+        1 => LevelFilter::Error,
+        2 => LevelFilter::Warn,
+        4 => LevelFilter::Debug,
+        5 => LevelFilter::Trace,
+        _ => LevelFilter::Off,
+    };
+    info!("日志等级：{}", level.to_string());
+    log::set_max_level(level);
 
     let undumpfile = pathparse::pathparse(input); // 该列表将存入文件的路径
 
     let taskcount = undumpfile.len();
     let mut success_count = 0; //成功任务数
+    let mut ignore_count = 0; //忽略的任务数
+    let mut failure_count = 0; //发生错误的
 
     if taskcount == 0 {
         error!("没有找到有效文件。使用-i参数输入需要解密的文件或文件夹。");
@@ -81,40 +88,34 @@ fn main() -> Result<(), AppError> {
     };
     // 初始化线程池
     let pool = threadpool::Pool::new(max_workers);
-    // let threadpoolbuilder = ThreadPoolBuilder::new()
-    //     .num_threads(max_workers)
-    //     .build()
-    //     .unwrap(); //初始化线程池
-    //                //FIXME暂时unwrap
+
     info!(
         "将启用{}线程",
         max_workers.to_string().color(Color::BrightGreen)
     );
     // 初始化通讯
-    let (tx, rx) = mpsc::channel();
+    // let (tx, rx) = mpsc::channel();
+    let (tx, rx) = bounded(taskcount * 6);
 
     // 循环开始
     for filepath in undumpfile {
         let output = outputdir.clone();
-        let senderin: Sender<messager::Message> = tx.clone();
-        let senderon: Sender<messager::Message> = tx.clone();
+        let senderin: Sender<Message> = tx.clone();
+        let senderon: Sender<Message> = tx.clone();
         // 多线程
         pool.execute(move || match Ncmfile::new(filepath.as_str()) {
             Ok(mut n) => match n.dump(Path::new(&output), senderin, forcesave) {
                 Ok(_) => {}
                 Err(e) => {
-                    let messager = messager::Messager::new(n.fullfilename, senderon);
-                    let _ = messager.send(messager::Signals::Err(e));
+                    let messager = Messager::new(n.fullfilename, senderon);
+                    let _ = messager.send(Signals::Err(e));
                 }
             },
             Err(e) => {
-                let messager = messager::Messager::new(filepath, senderon);
-                let _ = messager.send(messager::Signals::Err(e));
+                let messager = Messager::new(filepath, senderon);
+                let _ = messager.send(Signals::Err(e));
             }
         });
-        // threadpoolbuilder.install(|| {
-        //     //TODO
-        // })
     }
     //循环到此结束
     //进度条
@@ -134,12 +135,14 @@ fn main() -> Result<(), AppError> {
     // 接受消息!!!!!!!!!!
     for messages in rx {
         match messages.signal {
-            messager::Signals::End | messager::Signals::Err(_) => success_count += 1,
+            Signals::End => success_count += 1,
+            Signals::Err(AppError::ProtectFile) => ignore_count += 1,
+            Signals::Err(_) => failure_count += 1,
             _ => (),
         }
-        if success_count < taskcount {
+        if (success_count+ignore_count+failure_count) < taskcount {
             progressbar.inc(1);
-            messages.log(); //发送log
+            // messages.log(); //发送log
         } else {
             break;
         }
@@ -155,9 +158,10 @@ fn main() -> Result<(), AppError> {
         }
     };
     info!(
-        "成功解密{}个文件,{}个文件解密失败，{}",
+        "成功解密{}个文件,跳过{}个文件,{}个文件解密失败，{}",
         success_count.to_string().bright_green(),
-        (taskcount - success_count).to_string().bright_red(),
+        ignore_count.to_string().purple(),
+        failure_count.to_string().bright_red(),
         showtime()
     );
 

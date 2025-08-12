@@ -6,8 +6,7 @@ use aes::Aes128;
 use audiotags::{MimeType, Picture, Tag};
 use base64::{self, Engine};
 use colored::*;
-#[allow(unused_imports)]
-use log::{debug, error, info, trace, warn};
+use log::{debug, info, trace};
 use messager::Signals;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::{self, Value};
@@ -16,7 +15,6 @@ use std::fs::{self, File};
 use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::str::from_utf8;
-use std::sync::mpsc;
 use std::vec;
 
 // lazy_static! {
@@ -26,9 +24,13 @@ use std::vec;
 // }
 
 // 原KEY_CORE数据：687A4852416D736F356B496E62617857
-const NEW_KEY_CORE:[u8;16] = [0x68, 0x7A, 0x48, 0x52, 0x41, 0x6D, 0x73, 0x6F, 0x35, 0x6B, 0x49, 0x6E, 0x62, 0x61, 0x78, 0x57];
+const NEW_KEY_CORE: [u8; 16] = [
+    0x68, 0x7A, 0x48, 0x52, 0x41, 0x6D, 0x73, 0x6F, 0x35, 0x6B, 0x49, 0x6E, 0x62, 0x61, 0x78, 0x57,
+];
 // 原KEY_META数据：2331346C6A6B5F215C5D2630553C2728
-const NEW_KEY_META:[u8;16]=[0x23, 0x31, 0x34, 0x6C, 0x6A, 0x6B, 0x5F, 0x21, 0x5C, 0x5D, 0x26, 0x30, 0x55, 0x3C, 0x27, 0x28];
+const NEW_KEY_META: [u8; 16] = [
+    0x23, 0x31, 0x34, 0x6C, 0x6A, 0x6B, 0x5F, 0x21, 0x5C, 0x5D, 0x26, 0x30, 0x55, 0x3C, 0x27, 0x28,
+];
 #[derive(Debug)]
 #[allow(unused_variables)]
 pub struct Ncmfile {
@@ -80,7 +82,7 @@ impl Ncmfile {
     /// - length 想要读取的长度
     pub fn seekread(&mut self, length: u64) -> Result<Vec<u8>, AppError> {
         if self.position + length > self.size {
-            return Err(AppError::FileReadError);
+            Err(AppError::FileReadError)
         } else {
             let mut reader = BufReader::new(&self.file);
             let _ = reader.seek(SeekFrom::Start(self.position));
@@ -100,7 +102,7 @@ impl Ncmfile {
     #[allow(dead_code)]
     pub fn seekread_from(&mut self, offset: u64, length: u64) -> Result<Vec<u8>, AppError> {
         if self.position + length > self.size {
-            return Err(AppError::FileReadError);
+            Err(AppError::FileReadError)
         } else {
             let mut reader = BufReader::new(&self.file);
             let _ = reader.seek(SeekFrom::Start(offset));
@@ -122,7 +124,7 @@ impl Ncmfile {
     pub fn seekread_no_error(&mut self, length: u64) -> Vec<u8> {
         if self.position + length > self.size {
             if self.position >= self.size {
-                return vec![];
+                vec![]
             } else {
                 let mut reader = BufReader::new(&self.file);
                 let _ = reader.seek(SeekFrom::Start(self.position));
@@ -130,7 +132,7 @@ impl Ncmfile {
                 let mut buf: Vec<u8> = vec![0; (self.size - self.position) as usize];
                 let _ = reader.read_exact(&mut buf);
                 self.position += length;
-                return buf[..].to_vec();
+                 buf[..].to_vec()
             }
         } else {
             let mut reader = BufReader::new(&self.file);
@@ -144,7 +146,7 @@ impl Ncmfile {
     /// 跳过某些数据
     pub fn skip(&mut self, length: u64) -> Result<(), AppError> {
         if self.position + length > self.size {
-            return Err(AppError::FileReadError);
+            Err(AppError::FileReadError)
         } else {
             self.position += length;
             Ok(())
@@ -152,8 +154,8 @@ impl Ncmfile {
     }
     ///按字节进行0x64异或。
     fn parse_key(key: &mut [u8]) -> &[u8] {
-        for i in 0..key.len() {
-            key[i] ^= 0x64;
+        for item in &mut *key  {
+            *item ^= 0x64;
         }
         key
     }
@@ -175,7 +177,7 @@ impl Ncmfile {
     fn is_ncm(data: Vec<u8>) -> Result<(), AppError> {
         let header = from_utf8(&data).map_err(|_| AppError::NotNcmFile)?;
         if header != "CTENFDAM" {
-            return Err(AppError::NotNcmFile);
+            Err(AppError::NotNcmFile)
         } else {
             Ok(())
         }
@@ -192,13 +194,12 @@ impl Ncmfile {
     pub fn dump(
         &mut self,
         outputdir: &Path,
-        tx: mpsc::Sender<messager::Message>,
+        tx: crossbeam_channel::Sender<messager::Message>,
         force_save: bool,
     ) -> Result<(), AppError> {
         let messager = messager::Messager::new(self.fullfilename.clone(), tx);
         let _ = messager.send(Signals::Start);
-        //TODO 通讯合法化
-        // info!("开始解密[{}]文件", self.fullfilename.yellow());
+
         // 获取magic header   应为CTENFDAM
         trace!("读取magic header");
         let magic_header = self.seekread(8)?;
@@ -217,15 +218,16 @@ impl Ncmfile {
             self.seekread(4)?
                 .try_into()
                 .map_err(|_| AppError::FileReadError)?,
-        ) as u64;//数据长度不够只能使用u32 然后转化为u64
-        // debug!("RC4密钥长度为：{}", key_length);
+        ) as u64; //数据长度不够只能使用u32 然后转化为u64
+                  // debug!("RC4密钥长度为：{}", key_length);
 
         //读取密钥 开头应为 neteasecloudmusic
         trace!("读取RC4密钥");
         let mut key_data = self.seekread(key_length)?;
         //aes128解密
-        let key_data = &aes128_to_slice(&NEW_KEY_CORE, Self::parse_key(&mut key_data[..]).to_vec())?; //先把密钥按照字节进行0x64异或
-                                                                                                   // RC4密钥
+        let key_data =
+            &aes128_to_slice(&NEW_KEY_CORE, Self::parse_key(&mut key_data[..]).to_vec())?; //先把密钥按照字节进行0x64异或
+                                                                                           // RC4密钥
         let key_data = Self::unpad(&key_data[..])[17..].to_vec(); //去掉neteasecloudmusic
 
         //读取meta信息的数据大小
@@ -242,16 +244,16 @@ impl Ncmfile {
         let meta_data = {
             let mut meta_data = self.seekread(meta_length)?; //读取源数据
                                                              //字节对0x63进行异或。
-            for i in 0..meta_data.len() {
-                meta_data[i] ^= 0x63;
+            for item in &mut meta_data {
+                *item ^= 0x63;
             }
             // base64解密
             let mut decode_data = Vec::<u8>::new();
-            let _ = match &base64::engine::general_purpose::STANDARD
+            if base64::engine::general_purpose::STANDARD
                 .decode_vec(&mut meta_data[22..], &mut decode_data)
+                .is_err()
             {
-                Err(_) => return Err(AppError::CannotReadMetaInfo),
-                _ => (),
+                return Err(AppError::CannotReadMetaInfo);
             };
             // aes128解密
             let aes_data = aes128_to_slice(&NEW_KEY_META, decode_data)?;
@@ -284,10 +286,9 @@ impl Ncmfile {
             // let filename = standardize_filename(filename);
             debug!("文件名：{}", filename.yellow());
             //链级创建输出目录
-            match fs::create_dir_all(outputdir) {
-                Err(_) => return Err(AppError::FileWriteError),
-                _ => (),
-            };
+            if fs::create_dir_all(outputdir).is_err() {
+                return Err(AppError::FileWriteError);
+            }
             outputdir.join(filename)
         };
 
@@ -323,7 +324,7 @@ impl Ncmfile {
         trace!("组成密码盒");
         let key_box = {
             let key_length = key_data.len();
-            let key_data = Vec::from(key_data);
+            // let key_data = Vec::from(key_data);
             let mut key_box = (0..=255).collect::<Vec<u8>>();
             let mut temp = 0;
             let mut last_byte = 0;
@@ -331,7 +332,7 @@ impl Ncmfile {
 
             for i in 0..=255 {
                 let swap = key_box[i as usize] as u64;
-                temp = (swap + last_byte as u64 + key_data[key_offset as usize] as u64) & 0xFF;
+                temp = (swap + last_byte + key_data[key_offset] as u64) & 0xFF;
                 key_offset += 1;
                 if key_offset >= key_length {
                     key_offset = 0;
@@ -357,7 +358,7 @@ impl Ncmfile {
                     let j = i & 0xFF;
 
                     chunk[i - 1] ^= key_box[(key_box[j] as usize
-                        + key_box[(key_box[j as usize] as usize + j) & 0xff] as usize)
+                        + key_box[(key_box[j] as usize + j) & 0xff] as usize)
                         & 0xff]
                     // chunk[i - 1] ^= key_box[(key_box[j] + key_box[(key_box[j as usize] as usize + j as usize) & 0xFF]) & 0xFF];
                 }
@@ -385,7 +386,7 @@ impl Ncmfile {
             };
             tag.set_album_cover(cover); //添加封面
             let _ = tag
-                .write_to_path(&path.to_str().ok_or(AppError::SaveError)?)
+                .write_to_path(path.to_str().ok_or(AppError::SaveError)?)
                 .map_err(|_| AppError::SaveError); //保存
         }
 
@@ -464,7 +465,9 @@ pub struct Key {
 
 fn convert_to_generic_arrays(input: &[u8]) -> Result<Vec<GenericArray<u8, U16>>, AppError> {
     // 确保输入的长度是16的倍数
-    if input.len() % 16 == 0 {}
+    if input.len() % 16 != 0 {
+        return Err(AppError::FileDataError);
+    }
 
     Ok(input
         .chunks(16)
@@ -484,7 +487,7 @@ fn aes128_to_slice<T: AsRef<[u8]>>(key: &T, blocks: Vec<u8>) -> Result<Vec<u8>, 
     let mut blocks = convert_to_generic_arrays(&blocks)?;
 
     // 初始化密钥
-    let cipher = Aes128::new(&key);
+    let cipher = Aes128::new(key);
 
     // 开始解密
     cipher.decrypt_blocks(&mut blocks);
@@ -496,24 +499,24 @@ fn aes128_to_slice<T: AsRef<[u8]>>(key: &T, blocks: Vec<u8>) -> Result<Vec<u8>, 
             x.push(i.to_owned());
         }
     }
-    Ok(x.into())
+    Ok(x)
 }
 
-/// ## 规范文件名称
-/// 防止创建文件失败
-/// 符号一一对应：
-/// -  \  /  *  ?  "  :   <  >  |
-/// -  _  _  ＊  ？ ＂  ：  ⟨  ⟩   _
-#[allow(dead_code)]
-fn standardize_filename(old_fullfilename: String) -> String {
-    trace!("格式化文件名");
-    let mut new_fullfilename = String::from(old_fullfilename);
-    // debug!("规范文件名：{}", new_fullfilename);
-    let standard = ["\\", "/", "*", "?", "\"", ":", "<", ">", "|"];
-    let resolution = ["_", "_", "＊", "？", "＂", "：", "⟨", "⟩", "_"];
-    for i in 0..standard.len() {
-        new_fullfilename =
-            new_fullfilename.replace(&standard[i].to_string(), &resolution[i].to_string());
-    }
-    new_fullfilename
-}
+// ## 规范文件名称
+// 防止创建文件失败
+// 符号一一对应：
+// -  \  /  *  ?  "  :   <  >  |
+// -  _  _  ＊  ？ ＂  ：  ⟨  ⟩   _
+// #[allow(dead_code)]
+// fn standardize_filename(old_fullfilename: String) -> String {
+//     trace!("格式化文件名");
+//     let mut new_fullfilename = String::from(old_fullfilename);
+//     // debug!("规范文件名：{}", new_fullfilename);
+//     let standard = ["\\", "/", "*", "?", "\"", ":", "<", ">", "|"];
+//     let resolution = ["_", "_", "＊", "？", "＂", "：", "⟨", "⟩", "_"];
+//     for i in 0..standard.len() {
+//         new_fullfilename =
+//             new_fullfilename.replace(&standard[i].to_string(), &resolution[i].to_string());
+//     }
+//     new_fullfilename
+// }

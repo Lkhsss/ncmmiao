@@ -1,7 +1,7 @@
 use colored::Color::{Cyan, Green, Red, Yellow,Magenta};
 use colored::Colorize;
 use indicatif::MultiProgress;
-use log::{LevelFilter, Log, Metadata, Record, SetLoggerError};
+use log::{Log, Metadata, Record, SetLoggerError};
 use std::sync::Arc;
 
 // 自定义Logger，将日志发送到MultiProgress
@@ -42,10 +42,6 @@ pub fn init_logger() -> Result<(), SetLoggerError> {
         mp: crate::MP.clone(),
     };
     log::set_boxed_logger(Box::new(logger))?;
-    if cfg!(debug_assertions) {
-        log::set_max_level(LevelFilter::Trace);//FIXME
-    } else {
-        log::set_max_level(LevelFilter::Info);
-    }
+    
     Ok(())
 }
