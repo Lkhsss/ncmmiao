@@ -32,7 +32,7 @@ jobs:
           os: windows-latest
           use-cross: true
           cargo-flags: ""
-          upx: true
+          upx: false
         - target: x86_64-apple-darwin
           os: macos-latest
           cargo-flags: ""
@@ -111,7 +111,7 @@ jobs:
         cargo -V
         rustc -V
     - name: Install UPX
-      if: runner.os == 'Windows' || runner.os == 'Linux'
+      if: (runner.os == 'Windows' || runner.os == 'Linux') && matrix.upx == 'true'
       uses: crazy-max/ghaction-upx@v3
       with:
           install-only: true
@@ -134,10 +134,10 @@ jobs:
         executable=target/$target/release/$bin
         if [[ "$RUNNER_OS" == "Windows" ]]; then
           upx --ultra-brute $executable.exe
-        elif [["$RUNNER_OS" == "Linux"]]; then
+        elif [["$RUNNER_OS" == "Linux" && matrix.upx == "true" ]]; then
           upx --ultra-brute $executable
         fi
-        if [[ "$RUNNER_OS" == "Windows" ]]; then
+        if [[ "$RUNNER_OS" == "Windows" && matrix.upx == "true" ]]; then
           executable=$executable.exe
         fi
         mkdir $dist_dir
