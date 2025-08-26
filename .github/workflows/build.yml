@@ -132,12 +132,16 @@ jobs:
         dist_dir=`pwd`/dist
         name=$bin-$version-$target
         executable=target/$target/release/$bin
-        if [[ "$RUNNER_OS" == "Windows" ]]; then
+
+
+        if [[ "$RUNNER_OS" == "Windows" && matrix.upx == "true" ]]; then
           upx --ultra-brute $executable.exe
         elif [["$RUNNER_OS" == "Linux" && matrix.upx == "true" ]]; then
           upx --ultra-brute $executable
         fi
-        if [[ "$RUNNER_OS" == "Windows" && matrix.upx == "true" ]]; then
+
+
+        if [[ "$RUNNER_OS" == "Windows"  ]]; then
           executable=$executable.exe
         fi
         mkdir $dist_dir
