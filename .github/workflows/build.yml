@@ -22,40 +22,50 @@ jobs:
           use-cross: true
           os: ubuntu-latest
           cargo-flags: ""
+          upx: true
         - target: aarch64-apple-darwin
           os: macos-latest
           use-cross: true
           cargo-flags: ""
+          upx: false
         - target: aarch64-pc-windows-msvc
           os: windows-latest
           use-cross: true
           cargo-flags: ""
+          upx: true
         - target: x86_64-apple-darwin
           os: macos-latest
           cargo-flags: ""
+          upx: false
         - target: x86_64-pc-windows-msvc
           os: windows-latest
           cargo-flags: ""
+          upx: true
         - target: x86_64-unknown-linux-musl
           os: ubuntu-latest
           use-cross: true
           cargo-flags: ""
+          upx: true
         - target: i686-unknown-linux-musl
           os: ubuntu-latest
           use-cross: true
           cargo-flags: ""
+          upx: true
         - target: i686-pc-windows-msvc
           os: windows-latest
           use-cross: true
           cargo-flags: ""
+          upx: true
         - target: armv7-unknown-linux-musleabihf
           os: ubuntu-latest
           use-cross: true
           cargo-flags: ""
+          upx: true
         - target: arm-unknown-linux-musleabihf
           os: ubuntu-latest
           use-cross: true
           cargo-flags: ""
+          upx: true
 
     runs-on: ${{matrix.os}}
     env:
@@ -100,6 +110,11 @@ jobs:
         rustup default
         cargo -V
         rustc -V
+    - name: Install UPX
+      if: runner.os == 'Windows' || runner.os == 'Linux'
+      uses: crazy-max/ghaction-upx@v3
+      with:
+          install-only: true
       
     - name: Build
       shell: bash
@@ -117,6 +132,9 @@ jobs:
         dist_dir=`pwd`/dist
         name=$bin-$version-$target
         executable=target/$target/release/$bin
+        if [[ "$RUNNER_OS" == "Windows" || "$RUNNER_OS" == "Linux" ]]; then
+          upx --ultra-brute $executable
+        fi
         if [[ "$RUNNER_OS" == "Windows" ]]; then
           executable=$executable.exe
         fi
