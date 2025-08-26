@@ -133,7 +133,7 @@ jobs:
         name=$bin-$version-$target
         executable=target/$target/release/$bin
         if [[ "$RUNNER_OS" == "Windows" || "$RUNNER_OS" == "Linux" ]]; then
-          upx --ultra-brute $executable
+          upx --ultra-brute $executable.exe
         fi
         if [[ "$RUNNER_OS" == "Windows" ]]; then
           executable=$executable.exe
