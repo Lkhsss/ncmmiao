@@ -32,6 +32,7 @@ fn main() -> Result<(), AppError> {
             exit(1)
         }
     };
+
     // 初始化日志系统
     match logger::init_logger() {
         Ok(_) => (),
@@ -41,6 +42,10 @@ fn main() -> Result<(), AppError> {
     };
 
     let cli = clap::Cli::parse();
+
+    //设置彩色输出
+    let if_colorful = !cli.nocolor;
+    colored::control::set_override(if_colorful);
 
     //获取cpu核心数
     let cpus = num_cpus::get();

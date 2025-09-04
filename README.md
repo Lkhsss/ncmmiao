@@ -20,16 +20,45 @@ cargo build -r
 ## 使用
 支持单一文件，多文件夹递归批量解密。
 ```
-ncmmiao [OPTIONS]
+Usage: ncmmiao [OPTIONS]
+
 Options:
-  -w, --workers <WORKERS>  并发的最大线程数，默认为8线程(性能还行的话建议直接32-64，嘎嘎快)
+  -w, --workers <WORKERS>  并发的最大线程数，默认为cpu核心数
   -i, --input <输入文件/目录>    需要解密的文件夹或文件
   -o, --output <输出目录>      输出目录 [default: NcmmiaoOutput]
   -f, --forcesave          强制覆盖保存开关
   -a, --autoopen           自动打开输出目录
+  -n, --nocolor            是否关闭彩色输出。在不支持真彩色的老机型中关闭。
+  -d, --debug...           设定输出日志的的等级。v越多日志越详细
+  -h, --help               Print help
+  -V, --version            Print version
+```
+### 例
+文件位于`D:/Music`中，要求使用64线程，并且完成后自动打开文件夹，不强制覆盖保存
+```bash
+ncmmiao -i "D:/Music" -w 64 -a
 ```
 
-~~输出文件夹在output。等我想写了再写命令行解析（bushi。~~ 写了写了
+### 关于`覆盖保存`
+覆盖保存用于当解密进行一半时突然终止程序，不知道程序是否已解密完成时启用，可以强制覆盖已存在的文件，保证文件完整性。
+
+### 关于日志系统
+日志共六个等级: Error Warn Info Debug Trace
+v越多，日志越详细。
+仅输出错误的日志 Error
+```bash
+ncmmiao -v
+```
+输出警告以上的日志 Warn
+```bash
+ncmmiao -vv
+```
+输出提示以上的日志 INFO (默认)
+```bash
+ncmmiao -vvv
+```
+以此类推
+
 
 ---
 
@@ -43,6 +72,7 @@ Options:
  - [x] 自动覆盖开关
  - [x] 优化并发设置
  - [x] 优化信息传递
+ - [x] 颜色控制
 
 
 ---

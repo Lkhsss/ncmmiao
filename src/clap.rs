@@ -24,6 +24,11 @@ pub struct Cli {
     #[arg(short, long, name = "自动打开输出目录")]
     pub autoopen: bool,
 
+    /// 是否关闭彩色输出。在不支持真彩色的老机型中关闭。
+    #[arg(short, long, default_value = "false")]
+    pub nocolor: bool,
+
+    /// 设定输出日志的的等级。v越多日志越详细
     #[arg(short, long, action = clap::ArgAction::Count)]
     pub debug: u8,
 }
