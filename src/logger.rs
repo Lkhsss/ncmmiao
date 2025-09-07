@@ -25,11 +25,11 @@ impl Log for MultiProgressLogger {
             };
             #[cfg(not(target_os = "windows"))]
             let level = match record.level() {
-                log::Level::Error => ("Error").color(Red),
-                log::Level::Warn => ("Warn").color(Yellow),
-                log::Level::Info => ("Info").color(Green),
-                log::Level::Debug => ("Debug").color(Magenta),
-                log::Level::Trace => ("Trace").color(Cyan),
+                log::Level::Error => ("Error").with(Color::Red),
+                log::Level::Warn => ("Warn").with(Color::Yellow),
+                log::Level::Info => ("Info").with(Color::Green),
+                log::Level::Debug => ("Debug").with(Color::Magenta),
+                log::Level::Trace => ("Trace").with(Color::Cyan),
             };
 
             let message = format!(
