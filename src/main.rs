@@ -43,9 +43,10 @@ fn main() -> Result<(), AppError> {
     let cli = clap::Cli::parse();
 
     //设置彩色输出
-    // let if_colorful = !cli.nocolor;
-    // colored::control::set_override(if_colorful);
-    // crossterm::terminal::enable_raw_mode()
+    if cli.nocolor{
+        std::env::set_var("NO_COLOR", "true");
+    };
+
     //FIXME 更改颜色库
     //TODO控制颜色输出,更改为使用环境变量
 
