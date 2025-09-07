@@ -5,13 +5,13 @@ use aes::cipher::{generic_array::GenericArray, BlockDecrypt, KeyInit};
 use aes::Aes128;
 use audiotags::{MimeType, Picture, Tag};
 use base64::{self, Engine};
-use colored::*;
+use crossterm::style::{Color, Stylize}; //防止windows终端乱码
 use log::{debug, info, trace};
 use messager::Signals;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::{self, Value};
 use std::fmt::Debug;
-use std::fs::{self, File};
+use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::str::from_utf8;
@@ -132,7 +132,7 @@ impl Ncmfile {
                 let mut buf: Vec<u8> = vec![0; (self.size - self.position) as usize];
                 let _ = reader.read_exact(&mut buf);
                 self.position += length;
-                 buf[..].to_vec()
+                buf[..].to_vec()
             }
         } else {
             let mut reader = BufReader::new(&self.file);
@@ -154,7 +154,7 @@ impl Ncmfile {
     }
     ///按字节进行0x64异或。
     fn parse_key(key: &mut [u8]) -> &[u8] {
-        for item in &mut *key  {
+        for item in &mut *key {
             *item ^= 0x64;
         }
         key
@@ -185,6 +185,15 @@ impl Ncmfile {
     /// 使用PKCS5Padding标准，去掉填充信息
     fn unpad(data: &[u8]) -> Vec<u8> {
         data[..data.len() - data[data.len() - 1] as usize].to_vec()
+    }
+
+    fn get_filename(&self) -> &str {
+        &self.filename
+    }
+
+    #[allow(dead_code)]
+    fn get_fullfilename(&self) -> &str {
+        &self.fullfilename
     }
 }
 
@@ -273,23 +282,25 @@ impl Ncmfile {
         //处理文件路径
         trace!("拼接文件路径");
         let path = {
-            let filename = format!(
+            let output_filename = &format!(
                 "{}.{}",
-                self.filename,
+                self.get_filename(),
                 meta_data
                     .get("format")
                     .ok_or(AppError::CannotReadMetaInfo)?
                     .as_str()
                     .ok_or(AppError::CannotReadMetaInfo)?
-            );
+            )[..];
 
-            // let filename = standardize_filename(filename);
-            debug!("文件名：{}", filename.yellow());
+            // let output_filename = standardize_filename(output_filename);
+            debug!("文件名：{}", output_filename.with(Color::Yellow));
+
+            //已在程序开头创建，无需浪费性能
             //链级创建输出目录
-            if fs::create_dir_all(outputdir).is_err() {
-                return Err(AppError::FileWriteError);
-            }
-            outputdir.join(filename)
+            // if fs::create_dir_all(outputdir).is_err() {
+            //     return Err(AppError::FileWriteError);
+            // }
+            outputdir.join(output_filename)
         };
 
         debug!("文件路径: {:?}", path);
@@ -392,13 +403,13 @@ impl Ncmfile {
 
         info!(
             "[{}] 文件已保存到: {}",
-            self.filename.yellow(),
-            path.to_str().ok_or(AppError::SaveError)?.bright_cyan()
+            self.get_filename().with(Color::Yellow),
+            path.to_str().ok_or(AppError::SaveError)?.with(Color::Cyan)
         );
         info!(
             "[{}]{}",
-            self.fullfilename.yellow(),
-            "解密成功".bright_green()
+            self.get_filename().with(Color::Yellow),
+            "解密成功".with(Color::Green)
         );
         let _ = messager.send(Signals::End);
         Ok(())

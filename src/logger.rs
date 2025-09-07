@@ -1,5 +1,4 @@
-use colored::Color::{Cyan, Green, Red, Yellow,Magenta};
-use colored::Colorize;
+use crossterm::style::{Color, Stylize}; //防止windows终端乱码
 use indicatif::MultiProgress;
 use log::{Log, Metadata, Record, SetLoggerError};
 use std::sync::Arc;
@@ -16,6 +15,15 @@ impl Log for MultiProgressLogger {
 
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
+            #[cfg(target_os = "windows")]
+            let level = match record.level() {
+                log::Level::Error => ("Error").with(Color::Red),
+                log::Level::Warn => ("Warn").with(Color::Yellow),
+                log::Level::Info => ("Info").with(Color::Green),
+                log::Level::Debug => ("Debug").with(Color::Magenta),
+                log::Level::Trace => ("Trace").with(Color::Cyan),
+            };
+            #[cfg(not(target_os = "windows"))]
             let level = match record.level() {
                 log::Level::Error => ("Error").color(Red),
                 log::Level::Warn => ("Warn").color(Yellow),
@@ -23,6 +31,7 @@ impl Log for MultiProgressLogger {
                 log::Level::Debug => ("Debug").color(Magenta),
                 log::Level::Trace => ("Trace").color(Cyan),
             };
+
             let message = format!(
                 "[{}][{}] {}",
                 chrono::Local::now().format("%H:%M:%S"),
@@ -42,6 +51,6 @@ pub fn init_logger() -> Result<(), SetLoggerError> {
         mp: crate::MP.clone(),
     };
     log::set_boxed_logger(Box::new(logger))?;
-    
+
     Ok(())
 }

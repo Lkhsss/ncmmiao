@@ -1,6 +1,6 @@
 use ::clap::Parser;
-use colored::{Color, Colorize};
 use crossbeam_channel::{bounded, Sender};
+use crossterm::style::{Color, Stylize}; //防止windows终端乱码
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use log::{error, info, warn, LevelFilter};
@@ -23,16 +23,7 @@ use apperror::AppError;
 use ncmdump::Ncmfile;
 use time::TimeCompare;
 
-
 fn main() -> Result<(), AppError> {
-    let timer = match TimeCompare::new() {
-        Ok(t) => t,
-        Err(e) => {
-            error!("无法初始化时间戳系统。{}", e);
-            exit(1)
-        }
-    };
-
     // 初始化日志系统
     match logger::init_logger() {
         Ok(_) => (),
@@ -41,11 +32,22 @@ fn main() -> Result<(), AppError> {
         }
     };
 
+    let timer = match TimeCompare::new() {
+        Ok(t) => t,
+        Err(e) => {
+            error!("无法初始化时间戳系统。{}", e);
+            exit(1)
+        }
+    };
+
     let cli = clap::Cli::parse();
 
     //设置彩色输出
-    let if_colorful = !cli.nocolor;
-    colored::control::set_override(if_colorful);
+    // let if_colorful = !cli.nocolor;
+    // colored::control::set_override(if_colorful);
+    // crossterm::terminal::enable_raw_mode()
+    //FIXME 更改颜色库
+    //TODO控制颜色输出,更改为使用环境变量
 
     //获取cpu核心数
     let cpus = num_cpus::get();
@@ -58,7 +60,7 @@ fn main() -> Result<(), AppError> {
                 1
             }
         }
-        None => cpus,//默认使用cpu核心数作为线程数
+        None => cpus, //默认使用cpu核心数作为线程数
     };
     //输入目录
     let input = cli.input;
@@ -67,7 +69,7 @@ fn main() -> Result<(), AppError> {
     // 强制覆盖
     let forcesave = cli.forcesave;
     if forcesave {
-        warn!("文件{}已开启！", "强制覆盖".bright_red())
+        warn!("文件{}已开启！", "强制覆盖".with(Color::Red))
     }
     let level = match cli.debug {
         0 | 3 => LevelFilter::Info,
@@ -77,7 +79,7 @@ fn main() -> Result<(), AppError> {
         5 => LevelFilter::Trace,
         _ => LevelFilter::Off,
     };
-    info!("日志等级：{}", level.to_string());
+    info!("日志等级：{}", level);
     log::set_max_level(level);
 
     let undumpfile = pathparse::pathparse(input); // 该列表将存入文件的路径
@@ -88,16 +90,22 @@ fn main() -> Result<(), AppError> {
     let mut failure_count = 0; //发生错误的
 
     if taskcount == 0 {
-        error!("没有找到有效文件。使用-i参数输入需要解密的文件或文件夹。");
+        if cli.autoopen {
+            opendir::autoopen(cli.autoopen, outputdir);
+        } else {
+            error!("没有找到有效文件。使用-i参数输入需要解密的文件或文件夹。使用-a参数自动打开输出文件夹。");
+        }
+
         exit(2);
     };
+    // 创建完整的父目录
+    if std::fs::create_dir_all(&outputdir).is_err() {
+        return Err(AppError::CannotCreateDir);
+    }
     // 初始化线程池
     let pool = threadpool::Pool::new(max_workers);
 
-    info!(
-        "将启用{}线程",
-        max_workers.to_string().color(Color::BrightGreen)
-    );
+    info!("将启用{}线程", max_workers.to_string().with(Color::Green));
     // 初始化通讯
     // let (tx, rx) = mpsc::channel();
     let (tx, rx) = bounded(taskcount * 6);
@@ -145,7 +153,7 @@ fn main() -> Result<(), AppError> {
             Signals::Err(_) => failure_count += 1,
             _ => (),
         }
-        if (success_count+ignore_count+failure_count) < taskcount {
+        if (success_count + ignore_count + failure_count) < taskcount {
             progressbar.inc(1);
             // messages.log(); //发送log
         } else {
@@ -164,19 +172,14 @@ fn main() -> Result<(), AppError> {
     };
     info!(
         "成功解密{}个文件,跳过{}个文件,{}个文件解密失败，{}",
-        success_count.to_string().bright_green(),
-        ignore_count.to_string().purple(),
-        failure_count.to_string().bright_red(),
+        success_count.to_string().with(Color::Green),
+        ignore_count.to_string().with(Color::Magenta),
+        failure_count.to_string().with(Color::Red),
         showtime()
     );
 
     // 自动打开输出文件夹
-    if cli.autoopen {
-        info!("自动打开文件夹：[{}]", outputdir.cyan());
-        opendir::opendir(outputdir.into());
-    } else {
-        info!("输出文件夹：[{}]", outputdir.cyan());
-    };
+    opendir::autoopen(cli.autoopen, outputdir);
     Ok(())
 }
 

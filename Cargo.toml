@@ -17,8 +17,8 @@ audiotags = { version = "0.5.0", default-features = false }
 base64 = { version = "0.22.*" }
 chrono = { version = "0.4.*", features = ["clock"], default-features = false }
 clap = { version = "4.5.*", features = ["derive", "std"] }
-colored = { version = "3.0.0", default-features = false }
 crossbeam-channel = "0.5.15"
+crossterm = "0.29.0"
 env_logger = { version = "0.11.7", default-features = false }
 image = "0.25.*"
 indicatif = "0.18.*"
