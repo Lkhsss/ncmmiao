@@ -1,7 +1,8 @@
 use crate::apperror::AppError;
 use crate::messager;
 use aes::cipher::generic_array::typenum::U16;
-use aes::cipher::{generic_array::GenericArray, BlockDecrypt, KeyInit};
+use aes::cipher::generic_array::GenericArray;
+use aes::cipher::{BlockDecrypt, KeyInit};
 use aes::Aes128;
 use audiotags::{MimeType, Picture, Tag};
 use base64::{self, Engine};
@@ -112,15 +113,15 @@ impl Ncmfile {
             Ok(buf[..].to_vec())
         }
     }
-    #[allow(dead_code)]
-    pub fn seekread_to_end(&mut self) -> Result<Vec<u8>, std::io::Error> {
-        let mut reader = BufReader::new(&self.file);
-        reader.seek(SeekFrom::Start(self.position))?;
-        let mut buf = vec![0; self.size as usize - self.position as usize];
-        reader.read_exact(&mut buf)?;
-        self.position = self.size;
-        Ok(buf[..].to_vec())
-    }
+    // 未启用
+    // pub fn seekread_to_end(&mut self) -> Result<Vec<u8>, std::io::Error> {
+    //     let mut reader = BufReader::new(&self.file);
+    //     reader.seek(SeekFrom::Start(self.position))?;
+    //     let mut buf = vec![0; self.size as usize - self.position as usize];
+    //     reader.read_exact(&mut buf)?;
+    //     self.position = self.size;
+    //     Ok(buf[..].to_vec())
+    // }
     pub fn seekread_no_error(&mut self, length: u64) -> Vec<u8> {
         if self.position + length > self.size {
             if self.position >= self.size {
@@ -159,7 +160,7 @@ impl Ncmfile {
         }
         key
     }
-
+    // 保存
     fn save(&mut self, path: &PathBuf, data: Vec<u8>) -> Result<(), AppError> {
         let music_file = match File::create(path) {
             Ok(o) => o,
@@ -174,6 +175,7 @@ impl Ncmfile {
         };
         Ok(())
     }
+
     fn is_ncm(data: Vec<u8>) -> Result<(), AppError> {
         let header = from_utf8(&data).map_err(|_| AppError::NotNcmFile)?;
         if header != "CTENFDAM" {
@@ -252,8 +254,9 @@ impl Ncmfile {
         trace!("读取meta信息");
         let meta_data = {
             let mut meta_data = self.seekread(meta_length)?; //读取源数据
-                                                             //字节对0x63进行异或。
+
             for item in &mut meta_data {
+                //字节对0x63进行异或。
                 *item ^= 0x63;
             }
             // base64解密
@@ -278,6 +281,7 @@ impl Ncmfile {
             }; //解析json数据
             data
         };
+        debug!("{}",meta_data);
 
         //处理文件路径
         trace!("拼接文件路径");
@@ -484,7 +488,7 @@ fn convert_to_generic_arrays(input: &[u8]) -> Result<Vec<GenericArray<u8, U16>>,
         .chunks(16)
         .map(|chunk| {
             // 将每个块转换为GenericArray
-            GenericArray::clone_from_slice(chunk)
+            GenericArray::from_slice(chunk).clone()
         })
         .collect())
 }

@@ -1,9 +1,9 @@
 use ::clap::Parser;
-use crossbeam_channel::{bounded, Sender};
+use crossbeam_channel::{Sender, bounded};
 use crossterm::style::{Color, Stylize}; //防止windows终端乱码
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
-use log::{error, info, warn, LevelFilter};
+use log::{LevelFilter, error, info, warn};
 use messager::{Message, Messager, Signals};
 use std::process::exit;
 use std::time::Duration;
@@ -43,12 +43,13 @@ fn main() -> Result<(), AppError> {
     let cli = clap::Cli::parse();
 
     //设置彩色输出
-    if cli.nocolor{
-        std::env::set_var("NO_COLOR", "true");
+    if cli.nocolor {
+        // 2024 Edition新标准，被标记为不安全函数
+        // 在单线程还是安全的
+        unsafe {
+            std::env::set_var("NO_COLOR", "true");
+        }
     };
-
-    //FIXME 更改颜色库
-    //TODO控制颜色输出,更改为使用环境变量
 
     //获取cpu核心数
     let cpus = num_cpus::get();
@@ -94,7 +95,9 @@ fn main() -> Result<(), AppError> {
         if cli.autoopen {
             opendir::autoopen(cli.autoopen, outputdir);
         } else {
-            error!("没有找到有效文件。使用-i参数输入需要解密的文件或文件夹。使用-a参数自动打开输出文件夹。");
+            error!(
+                "没有找到有效文件。使用-i参数输入需要解密的文件或文件夹。使用-a参数自动打开输出文件夹。"
+            );
         }
 
         exit(2);

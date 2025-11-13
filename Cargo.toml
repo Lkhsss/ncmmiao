@@ -1,7 +1,7 @@
 [package]
 name = "ncmmiao"
-version = "2.10.22"
-edition = "2021"
+version = "2.10.23"
+edition = "2024"
 authors = ["Lkhsss <lkhsss1019@gmail.com>"]
 description = "A magic tool convert ncm to flac"
 repository = "https://github.com/lkhsss/ncmmiao"
@@ -12,7 +12,7 @@ keywords = ["ncm", "flac", "neteasemusic"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-aes = { version = "0.8.4", default-features = false }
+aes = "0.8.4"
 audiotags = { version = "0.5.0", default-features = false }
 base64 = { version = "0.22.*" }
 chrono = { version = "0.4.*", features = ["clock"], default-features = false }
