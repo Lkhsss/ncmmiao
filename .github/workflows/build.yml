@@ -164,12 +164,10 @@ jobs:
               echo "archive=dist/$name.tar.gz" >> $GITHUB_OUTPUT
           fi
       - name: Publish Archive
-        uses: softprops/action-gh-release@v2.2.1
-        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        uses: softprops/action-gh-release@v3
+        if: github.ref_type == 'tag'
         with:
-          draft: false
           files: ${{ steps.package.outputs.archive }}
-          prerelease: ${{ steps.check-tag.outputs.rc == 'true' }}
 
   publish-crate:
     name: Publish to crates.io
