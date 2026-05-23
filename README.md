@@ -1,5 +1,7 @@
 # NcmMiao :tada:
-[![build](https://github.com/Lkhsss/NcmMiao/actions/workflows/build.yml/badge.svg?event=push)](https://github.com/Lkhsss/NcmMiao/actions/workflows/build.yml)
+[![Release](https://github.com/Lkhsss/ncmmiao/actions/workflows/build.yml/badge.svg?branch=main&event=workflow_run)](https://github.com/Lkhsss/ncmmiao/actions/workflows/build.yml)
+
+> 当前已不支持win7
 
 一个使用Rust语言编写的ncm文件解密工具😆。
 

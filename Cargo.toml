@@ -1,6 +1,6 @@
 [package]
 name = "ncmmiao"
-version = "2.11.23"
+version = "2.11.24"
 edition = "2024"
 authors = ["Lkhsss <lkhsss1019@gmail.com>"]
 description = "A magic tool convert ncm to flac"
