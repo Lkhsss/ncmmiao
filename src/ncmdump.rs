@@ -36,7 +36,7 @@ const NEW_KEY_META: [u8; 16] = [
 #[allow(unused_variables)]
 pub struct Ncmfile {
     /// 文件对象
-    pub file: File,
+    pub reader: BufReader<File>,
     /// 文件名称，不带文件后缀
     pub filename: String,
     /// 文件名称，带后缀名
@@ -70,7 +70,7 @@ impl Ncmfile {
             None => return Err(AppError::CannotReadFileName),
         };
         Ok(Ncmfile {
-            file,
+            reader: BufReader::new(file),
             filename,
             fullfilename,
             size,
@@ -85,10 +85,9 @@ impl Ncmfile {
         if self.position + length > self.size {
             Err(AppError::FileReadError)
         } else {
-            let mut reader = BufReader::new(&self.file);
-            let _ = reader.seek(SeekFrom::Start(self.position));
+            let _ = self.reader.seek(SeekFrom::Start(self.position));
             let mut buf = vec![0; length as usize];
-            let _ = reader.read_exact(&mut buf);
+            let _ = self.reader.read_exact(&mut buf);
             self.position += length;
             Ok(buf[..].to_vec())
         }
@@ -102,13 +101,12 @@ impl Ncmfile {
     /// - length 想要读取的长度
     #[allow(dead_code)]
     pub fn seekread_from(&mut self, offset: u64, length: u64) -> Result<Vec<u8>, AppError> {
-        if self.position + length > self.size {
+        if offset + length > self.size {
             Err(AppError::FileReadError)
         } else {
-            let mut reader = BufReader::new(&self.file);
-            let _ = reader.seek(SeekFrom::Start(offset));
+            let _ = self.reader.seek(SeekFrom::Start(offset));
             let mut buf = vec![0; length as usize];
-            let _ = reader.read_exact(&mut buf);
+            let _ = self.reader.read_exact(&mut buf);
             self.position = offset + length;
             Ok(buf[..].to_vec())
         }
@@ -127,19 +125,18 @@ impl Ncmfile {
             if self.position >= self.size {
                 vec![]
             } else {
-                let mut reader = BufReader::new(&self.file);
-                let _ = reader.seek(SeekFrom::Start(self.position));
+                let remaining = (self.size - self.position) as usize;
+                let _ = self.reader.seek(SeekFrom::Start(self.position));
 
-                let mut buf: Vec<u8> = vec![0; (self.size - self.position) as usize];
-                let _ = reader.read_exact(&mut buf);
-                self.position += length;
+                let mut buf: Vec<u8> = vec![0; remaining];
+                let _ = self.reader.read_exact(&mut buf);
+                self.position = self.size;
                 buf[..].to_vec()
             }
         } else {
-            let mut reader = BufReader::new(&self.file);
-            let _ = reader.seek(SeekFrom::Start(self.position));
+            let _ = self.reader.seek(SeekFrom::Start(self.position));
             let mut buf = vec![0; length as usize];
-            let _ = reader.read_exact(&mut buf);
+            let _ = self.reader.read_exact(&mut buf);
             self.position += length;
             buf[..].to_vec()
         }
@@ -161,19 +158,12 @@ impl Ncmfile {
         key
     }
     // 保存
-    fn save(&mut self, path: &PathBuf, data: Vec<u8>) -> Result<(), AppError> {
+    fn create_writer(path: &Path) -> Result<BufWriter<File>, AppError> {
         let music_file = match File::create(path) {
             Ok(o) => o,
             Err(_) => return Err(AppError::FileWriteError),
         };
-        let mut writer = BufWriter::new(music_file);
-        let _ = writer.write_all(&data);
-        // 关闭文件
-        match writer.flush() {
-            Ok(o) => o,
-            Err(_) => return Err(AppError::FileWriteError),
-        };
-        Ok(())
+        Ok(BufWriter::new(music_file))
     }
 
     fn is_ncm(data: Vec<u8>) -> Result<(), AppError> {
@@ -270,8 +260,9 @@ impl Ncmfile {
             // aes128解密
             let aes_data = aes128_to_slice(&NEW_KEY_META, decode_data)?;
             // unpadding
-            let json_data = match String::from_utf8(Self::unpad(&aes_data)[6..].to_vec()) {
-                Ok(o) => o,
+            let unpadded = Self::unpad(&aes_data);
+            let json_data = match from_utf8(&unpadded[6..]) {
+                Ok(o) => o.to_owned(),
                 Err(_) => return Err(AppError::CannotReadMetaInfo),
             };
             debug!("json_data: {}", json_data);
@@ -363,7 +354,9 @@ impl Ncmfile {
         //解密音乐数据
         trace!("解密音乐数据");
         let _ = messager.send(Signals::Decrypt);
-        let mut music_data: Vec<u8> = Vec::new();
+
+        let _ = messager.send(Signals::Save);
+        let mut writer = Self::create_writer(&path)?;
         loop {
             let mut chunk = self.seekread_no_error(0x8000);
 
@@ -377,17 +370,16 @@ impl Ncmfile {
                         & 0xff]
                     // chunk[i - 1] ^= key_box[(key_box[j] + key_box[(key_box[j as usize] as usize + j as usize) & 0xFF]) & 0xFF];
                 }
-                //向music_data中最追加chunk
-                music_data.append(&mut chunk);
+                writer
+                    .write_all(&chunk)
+                    .map_err(|_| AppError::FileWriteError)?;
             } else {
                 break;
             }
         }
 
         //退出循环，写入文件
-
-        let _ = messager.send(Signals::Save);
-        self.save(&path, music_data)?;
+        writer.flush().map_err(|_| AppError::FileWriteError)?;
 
         {
             // 保存封面
@@ -508,11 +500,9 @@ fn aes128_to_slice<T: AsRef<[u8]>>(key: &T, blocks: Vec<u8>) -> Result<Vec<u8>, 
     cipher.decrypt_blocks(&mut blocks);
 
     //取出解密后的值
-    let mut x: Vec<u8> = Vec::new();
+    let mut x: Vec<u8> = Vec::with_capacity(blocks.len() * 16);
     for block in blocks.iter() {
-        for i in block {
-            x.push(i.to_owned());
-        }
+        x.extend_from_slice(block);
     }
     Ok(x)
 }

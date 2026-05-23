@@ -3,7 +3,7 @@ use std::path::Path;
 use walkdir::WalkDir;
 
 pub fn pathparse(input: Vec<String>) -> Vec<String> {
-    let mut undumpfile = Vec::new(); // 该列表将存入文件的路径
+    let mut undumpfile = Vec::with_capacity(input.len()); // 该列表将存入文件的路径
                                      // 遍历输入的每一个路径参数
     for arg in input {
         //解析传入的每一个路径：文件or文件夹

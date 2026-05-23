@@ -32,7 +32,7 @@ fn main() -> Result<(), AppError> {
         }
     };
 
-    let timer = match TimeCompare::new() {
+    let mut timer = match TimeCompare::new() {
         Ok(t) => t,
         Err(e) => {
             error!("无法初始化时间戳系统。{}", e);
@@ -112,7 +112,7 @@ fn main() -> Result<(), AppError> {
     info!("将启用{}线程", max_workers.to_string().with(Color::Green));
     // 初始化通讯
     // let (tx, rx) = mpsc::channel();
-    let (tx, rx) = bounded(taskcount * 6);
+    let (tx, rx) = bounded(max_workers * 6);
 
     // 循环开始
     for filepath in undumpfile {
@@ -137,7 +137,7 @@ fn main() -> Result<(), AppError> {
     //循环到此结束
     //进度条
 
-    let pb = ProgressBar::new((taskcount * 6) as u64) //长度乘积取决于Signal的数量
+    let pb = ProgressBar::new(taskcount as u64)
         .with_elapsed(Duration::from_millis(50))
         .with_style(
             ProgressStyle::default_bar()
@@ -152,21 +152,27 @@ fn main() -> Result<(), AppError> {
     // 接受消息!!!!!!!!!!
     for messages in rx {
         match messages.signal {
-            Signals::End => success_count += 1,
-            Signals::Err(AppError::ProtectFile) => ignore_count += 1,
-            Signals::Err(_) => failure_count += 1,
+            Signals::End => {
+                success_count += 1;
+                progressbar.inc(1);
+            }
+            Signals::Err(AppError::ProtectFile) => {
+                ignore_count += 1;
+                progressbar.inc(1);
+            }
+            Signals::Err(_) => {
+                failure_count += 1;
+                progressbar.inc(1);
+            }
             _ => (),
         }
-        if (success_count + ignore_count + failure_count) < taskcount {
-            progressbar.inc(1);
-            // messages.log(); //发送log
-        } else {
+        if (success_count + ignore_count + failure_count) >= taskcount {
             break;
         }
     }
     progressbar.finish_and_clear();
 
-    let timecount = timer.compare().unwrap();
+    let timecount = timer.compare_start().unwrap();
     let showtime = || {
         if timecount > 2000 {
             format!("共计用时{}秒", timecount / 1000)

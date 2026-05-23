@@ -15,6 +15,7 @@ pub enum AppError {
     SaveError,
     SystemTimeError,
     CannotCreateDir,
+    
 }
 
 impl std::error::Error for AppError {}

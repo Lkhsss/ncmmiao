@@ -37,6 +37,14 @@ jobs:
           os: macos-latest
           cargo-flags: ""
           upx: false
+        - target: x86_64-win7-windows-msvc
+          os: windows-latest
+          cargo-flags: ""
+          upx: true
+        - target: i686-win7-windows-msvc
+          os: windows-latest
+          cargo-flags: ""
+          upx: true
         - target: x86_64-pc-windows-msvc
           os: windows-latest
           cargo-flags: ""

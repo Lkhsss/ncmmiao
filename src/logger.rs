@@ -9,8 +9,10 @@ pub struct MultiProgressLogger {
 }
 
 impl Log for MultiProgressLogger {
-    fn enabled(&self, _metadata: &Metadata) -> bool {
-        true
+    fn enabled(&self, metadata: &Metadata) -> bool {
+        log::max_level()
+            .to_level()
+            .map_or(false, |max| metadata.level() <= max)
     }
 
     fn log(&self, record: &Record) {

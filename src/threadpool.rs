@@ -1,5 +1,5 @@
+use crossbeam_channel::{Receiver, Sender, unbounded};
 use log::debug;
-use std::sync::{mpsc, Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
 type Job = Box<dyn FnOnce() + 'static + Send>;
@@ -14,9 +14,9 @@ struct Worker {
 }
 
 impl Worker {
-    fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Message>>>) -> Worker {
+    fn new(id: usize, receiver: Receiver<Message>) -> Worker {
         let t = thread::spawn(move || loop {
-            let message = receiver.lock().unwrap().recv().unwrap();
+            let message = receiver.recv().unwrap();
             match message {
                 Message::NewJob(job) => {
                     // debug!("线程[{}]获得任务", id);
@@ -39,7 +39,7 @@ impl Worker {
 pub struct Pool {
     workers: Vec<Worker>,
     max_workers: usize,
-    sender: mpsc::Sender<Message>,
+    sender: Sender<Message>,
 }
 
 impl Pool {
@@ -49,12 +49,11 @@ impl Pool {
         } else {
             debug!("将开启{}线程", max_workers);
         }
-        let (tx, rx) = mpsc::channel();
+        let (tx, rx) = unbounded();
 
         let mut workers = Vec::with_capacity(max_workers);
-        let receiver = Arc::new(Mutex::new(rx));
         for i in 0..max_workers {
-            workers.push(Worker::new(i, Arc::clone(&receiver)));
+            workers.push(Worker::new(i, rx.clone()));
         }
 
         Pool {

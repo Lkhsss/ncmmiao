@@ -74,25 +74,30 @@ ncmmiao -vvv
  - [x] 优化信息传递
  - [x] 颜色控制
 
-
+---
+# 速度对比
+| 版本    | 时间(ms) |
+| ------- | -------- |
+| 2.10.23 | 1315     |
+| 2.11.23 | 1000     |
 ---
 # [Changelog](CHANGELOG.md)
 ---
 
 # 附 - ncm文件结构
-|信息|大小|作用|
-|:-:|:-:|:-:|
-|Magic Header|8 bytes|文件头|
-|Gap|2 bytes||
-|Key Length|4 bytes|RC4密钥长度，字节是按小端排序。|
-|Key Data|Key Length|RC4密钥|
-|Music Info Length|4 bytes|用AES128加密后的音乐相关信息的长度，小端排序。|
-|Music Info Data|Music Info Length|Json格式音乐信息数据。|
-|Gap|5 bytes||
-|CRC校验码|4 bytes|图片的CRC32校验码，小端排序。|
-|Image Size|4 bytes|图片的大小|
-|Image Data|Image Size|图片数据|
-|Music Data||音乐数据|
+|       信息        |       大小        |                      作用                      |
+| :---------------: | :---------------: | :--------------------------------------------: |
+|   Magic Header    |      8 bytes      |                     文件头                     |
+|        Gap        |      2 bytes      |                                                |
+|    Key Length     |      4 bytes      |        RC4密钥长度，字节是按小端排序。         |
+|     Key Data      |    Key Length     |                    RC4密钥                     |
+| Music Info Length |      4 bytes      | 用AES128加密后的音乐相关信息的长度，小端排序。 |
+|  Music Info Data  | Music Info Length |             Json格式音乐信息数据。             |
+|        Gap        |      5 bytes      |                                                |
+|     CRC校验码     |      4 bytes      |         图片的CRC32校验码，小端排序。          |
+|    Image Size     |      4 bytes      |                   图片的大小                   |
+|    Image Data     |    Image Size     |                    图片数据                    |
+|    Music Data     |                   |                    音乐数据                    |
 ---
 ### Magic Header
 ### Key Data
