@@ -1,6 +1,6 @@
 [package]
 name = "ncmmiao"
-version = "2.11.25"
+version = "2.12.25"
 edition = "2024"
 authors = ["Lkhsss <lkhsss1019@gmail.com>"]
 description = "A magic tool convert ncm to flac"
@@ -12,21 +12,22 @@ keywords = ["ncm", "flac", "neteasemusic"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-aes = "0.8.4"
+aes = "0.9.1"
 audiotags = { version = "0.5.0", default-features = false }
 base64 = { version = "0.22.*" }
 chrono = { version = "0.4.*", features = ["clock"], default-features = false }
+cipher = "0.5"
 clap = { version = "4.5.*", features = ["derive", "std"] }
 crossbeam-channel = "0.5.15"
 crossterm = "0.29.0"
-env_logger = { version = "0.11.7", default-features = false }
+env_logger = { version = "0.11.10", default-features = false }
+generic-array = "1.0"
 image = "0.25.*"
 indicatif = "0.18.*"
 lazy_static = "1.5.0"
-log = "0.4.20"
+log = "0.4.33"
 num_cpus = "1.17.0"
-serde = { version = "1.0.195", features = ["derive"] }
-serde_derive = "1.0.*"
+serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.*"
 walkdir = "2.5.0"
 

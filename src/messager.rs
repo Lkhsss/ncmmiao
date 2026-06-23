@@ -1,33 +1,14 @@
-use crate::{messager, AppError};
+use crate::AppError;
 use std::fmt::Debug;
-// use
+
 pub struct Messager {
-    name: String,
-    sender: crossbeam_channel::Sender<messager::Message>,
+    sender: crossbeam_channel::Sender<Message>,
 }
 
 pub struct Message {
-    pub name: String,
     pub signal: Signals,
 }
-// impl Message {
-//     // 定义一个公共方法 log，用于记录不同信号状态下的日志信息
-//     pub fn log(&self) {
 
-//         match &self.signal {
-//             Signals::Err(e) => match e {
-//                 AppError::ProtectFile => warn!("[{}] {}", self.name.cyan(), "强制覆盖已关闭。不保存文件"),
-//                 _ => error!("[{}] {}", self.name.cyan(), e),
-//             },
-//             Signals::Start => trace!("开始读取文件"),
-//             Signals::GetMetaInfo => trace!("解密歌曲元信息"),
-//             Signals::GetCover => trace!("解密封面图片数据"),
-//             Signals::Decrypt => trace!("解密歌曲信息"),
-//             Signals::Save => info!("保存文件"),
-//             Signals::End => trace!("解密流程结束")
-//         }
-//     }
-// }
 #[derive(PartialEq)]
 pub enum Signals {
     Start,
@@ -40,14 +21,11 @@ pub enum Signals {
 }
 
 impl Messager {
-    pub fn new(name: String, sender: crossbeam_channel::Sender<messager::Message>) -> Self {
-        Self { name, sender }
+    pub fn new(sender: crossbeam_channel::Sender<Message>) -> Self {
+        Self { sender }
     }
-    pub fn send(&self, s: Signals) -> Result<(), crossbeam_channel::SendError<messager::Message>> {
-        self.sender.send(Message {
-            name: self.name.clone(),
-            signal: s,
-        })
+    pub fn send(&self, s: Signals) -> Result<(), crossbeam_channel::SendError<Message>> {
+        self.sender.send(Message { signal: s })
     }
 }
 impl Debug for Message {
@@ -61,6 +39,6 @@ impl Debug for Message {
             Signals::GetCover => "获取封面",
             Signals::Err(e) => &e.to_string(),
         };
-        write!(f, "[{}] {}", self.name, message)
+        write!(f, "{}", message)
     }
 }

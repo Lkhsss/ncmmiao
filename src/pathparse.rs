@@ -3,17 +3,15 @@ use std::path::Path;
 use walkdir::WalkDir;
 
 pub fn pathparse(input: Vec<String>) -> Vec<String> {
-    let mut undumpfile = Vec::with_capacity(input.len()); // 该列表将存入文件的路径
-                                     // 遍历输入的每一个路径参数
+    let mut undumpfile = Vec::with_capacity(input.len());
+
     for arg in input {
-        //解析传入的每一个路径：文件or文件夹
         let path = Path::new(&arg);
 
         if path.is_file() {
-            // 当后缀符合为ncm时才加入列表
             if let Some(extension) = path.extension() {
                 if extension == "ncm" {
-                    let _ = &mut undumpfile.push(arg.to_owned());
+                    undumpfile.push(arg);
                 }
             }
         } else if path.is_dir() {
@@ -26,24 +24,19 @@ pub fn pathparse(input: Vec<String>) -> Vec<String> {
                     }
                 };
                 let filepath = new_entry.into_path();
-                // 当后缀符合为ncm时才加入列表
                 match filepath.extension() {
                     Some(extension) => {
                         if extension == "ncm" {
                             match filepath.to_str() {
-                                Some(s) => {
-                                    let _ = &mut undumpfile.push(s.into());
-                                }
+                                Some(s) => undumpfile.push(s.into()),
                                 None => {
-                                    debug!("无法获取你文件路径");
+                                    debug!("无法获取文件路径");
                                     continue;
                                 }
                             };
                         }
                     }
-                    None => {
-                        continue;
-                    }
+                    None => continue,
                 }
             }
         }

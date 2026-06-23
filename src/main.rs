@@ -1,6 +1,6 @@
 use ::clap::Parser;
 use crossbeam_channel::{Sender, bounded};
-use crossterm::style::{Color, Stylize}; //防止windows终端乱码
+use crossterm::style::{Color, Stylize};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use log::{LevelFilter, error, info, warn};
@@ -84,12 +84,12 @@ fn main() -> Result<(), AppError> {
     info!("日志等级：{}", level);
     log::set_max_level(level);
 
-    let undumpfile = pathparse::pathparse(input); // 该列表将存入文件的路径
+    let undumpfile = pathparse::pathparse(input);
 
     let taskcount = undumpfile.len();
-    let mut success_count = 0; //成功任务数
-    let mut ignore_count = 0; //忽略的任务数
-    let mut failure_count = 0; //发生错误的
+    let mut success_count = 0;
+    let mut ignore_count = 0;
+    let mut failure_count = 0;
 
     if taskcount == 0 {
         if cli.autoopen {
@@ -111,7 +111,6 @@ fn main() -> Result<(), AppError> {
 
     info!("将启用{}线程", max_workers.to_string().with(Color::Green));
     // 初始化通讯
-    // let (tx, rx) = mpsc::channel();
     let (tx, rx) = bounded(max_workers * 6);
 
     // 循环开始
@@ -124,19 +123,18 @@ fn main() -> Result<(), AppError> {
             Ok(mut n) => match n.dump(Path::new(&output), senderin, forcesave) {
                 Ok(_) => {}
                 Err(e) => {
-                    let messager = Messager::new(n.fullfilename, senderon);
+                    let messager = Messager::new(senderon);
                     let _ = messager.send(Signals::Err(e));
                 }
             },
             Err(e) => {
-                let messager = Messager::new(filepath, senderon);
+                let messager = Messager::new(senderon);
                 let _ = messager.send(Signals::Err(e));
             }
         });
     }
-    //循环到此结束
-    //进度条
 
+    //进度条
     let pb = ProgressBar::new(taskcount as u64)
         .with_elapsed(Duration::from_millis(50))
         .with_style(
@@ -148,8 +146,7 @@ fn main() -> Result<(), AppError> {
         .with_message("解密中");
     let progressbar = MP.add(pb);
 
-    //定义计数器
-    // 接受消息!!!!!!!!!!
+    // 接受消息
     for messages in rx {
         match messages.signal {
             Signals::End => {
