@@ -1,17 +1,18 @@
 use crate::apperror::AppError;
 use crate::messager;
 use aes::Aes128;
-use audiotags::{MimeType, Picture, Tag};
 use base64::{self, Engine};
 use cipher::{Array, BlockCipherDecrypt, KeyInit};
 use crossterm::style::{Color, Stylize};
 use generic_array::typenum::U16;
 use log::{debug, info, trace};
 use messager::Signals;
+use metaflac::Tag as FlacTag;
+use metaflac::block::{PictureType, StreamInfo};
 use serde_json::{self, Value};
 use std::fmt::Debug;
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
+use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::str::from_utf8;
 
@@ -80,14 +81,6 @@ impl Ncmfile {
         for item in &mut *key {
             *item ^= 0x64;
         }
-    }
-
-    fn create_writer(path: &Path) -> Result<BufWriter<File>, AppError> {
-        let music_file = match File::create(path) {
-            Ok(o) => o,
-            Err(_) => return Err(AppError::FileWriteError),
-        };
-        Ok(BufWriter::with_capacity(64 * 1024, music_file))
     }
 
     fn is_ncm(data: &[u8]) -> Result<(), AppError> {
@@ -246,8 +239,7 @@ impl Ncmfile {
         trace!("解密音乐数据");
         let _ = messager.send(Signals::Decrypt);
 
-        let _ = messager.send(Signals::Save);
-        let mut writer = Self::create_writer(&path)?;
+        let mut music_data = Vec::with_capacity((self.size - self.position) as usize);
         let mut chunk = vec![0u8; 0x8000];
         loop {
             let n = self
@@ -262,27 +254,25 @@ impl Ncmfile {
             for (idx, byte) in chunk[..n].iter_mut().enumerate() {
                 *byte ^= decrypt_table[(idx + 1) & 0xFF];
             }
-            writer
-                .write_all(&chunk[..n])
-                .map_err(|_| AppError::FileWriteError)?;
+            music_data.extend_from_slice(&chunk[..n]);
         }
 
-        writer.flush().map_err(|_| AppError::FileWriteError)?;
+        trace!("构建FLAC元数据并写入文件");
+        let _ = messager.send(Signals::Save);
 
-        {
-            let mut tag = match Tag::new().read_from_path(&path) {
-                Ok(o) => o,
-                Err(_) => return Err(AppError::CoverCannotSave),
-            };
-            let cover = Picture {
-                mime_type: MimeType::Jpeg,
-                data: &image_data,
-            };
-            tag.set_album_cover(cover);
-            let _ = tag
-                .write_to_path(path.to_str().ok_or(AppError::SaveError)?)
-                .map_err(|_| AppError::SaveError);
-        }
+        let mut tag = FlacTag::new();
+        tag.set_streaminfo(StreamInfo::new());
+        tag.add_picture(
+            "image/jpeg".to_string(),
+            PictureType::CoverFront,
+            image_data,
+        );
+
+        let mut file = std::fs::File::create(&path).map_err(|_| AppError::FileWriteError)?;
+        tag.write_to(&mut file)
+            .map_err(|_| AppError::CoverCannotSave)?;
+        file.write_all(&music_data)
+            .map_err(|_| AppError::FileWriteError)?;
 
         info!(
             "[{}] 文件已保存到: {}",

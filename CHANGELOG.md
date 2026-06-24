@@ -161,19 +161,25 @@
 - 进度条按任务完成更新，减少UI刷新开销
 - 优化AES输出拼接与元数据解析，减少拷贝
 
-## [2.12.25] - 2026.6.23
+## [2.13.25] - 2026.6.24
 
 ### Performance :rocket:
 
+- :fire: 封面嵌入改为内存构建+一次写出，消除读写回写双倍I/O，总耗时降约52%
+- :fire: 预分配music_data容量，消除Vec扩容的43% realloc开销，再降约50%
 - 预计算RC4解密查找表，每字节省去3次数组查表+2次加法，解密速度提升约3倍
 - 去掉顺序读取时的多余seek调用，让BufReader缓冲机制真正生效
 - 解密循环buffer复用，从每次分配32KB降为单次分配
 - 消除RC4密钥处理链路中的3次冗余to_vec拷贝
 - BufReader/BufWriter缓冲区从8KB增至64KB，减少read/write系统调用
+- 三轮火焰图优化总加速比约4.2x（1000ms → 237ms）
+
+### Upgrade
+
+- :arrow_up: 升级aes到0.9、cipher到0.5、env_logger/log/serde等兼容依赖到最新
 
 ### Fixed :bug:
 
-- :arrow_up: 升级依赖
 - 修复skip()未推进BufReader游标，导致文件解析偏移错乱的严重bug
 
 ### Refactoring
@@ -181,5 +187,4 @@
 - :hammer: 删除Message.name字段及其无效clone（每文件约6次）
 - :hammer: 删除未使用的Metadata/Key结构体、seekread_from/get_fullfilename/fullfilename等死代码
 - :hammer: is_ncm签名从Vec<u8>改为&[u8]，parse_key返回值改为()
-- :hammer: 清理pathparse无意义写法
-- :hammer: 删除未使用的导入和FullFilenameError
+- :hammer: 清理pathparse无意义写法，删除未使用的导入和FullFilenameError

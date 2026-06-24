@@ -1,6 +1,6 @@
 [package]
 name = "ncmmiao"
-version = "2.12.25"
+version = "2.13.25"
 edition = "2024"
 authors = ["Lkhsss <lkhsss1019@gmail.com>"]
 description = "A magic tool convert ncm to flac"
@@ -8,8 +8,6 @@ repository = "https://github.com/lkhsss/ncmmiao"
 license = "GPL-3.0-or-later"
 keywords = ["ncm", "flac", "neteasemusic"]
 
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 aes = "0.9.1"
@@ -26,6 +24,7 @@ image = "0.25.*"
 indicatif = "0.18.*"
 lazy_static = "1.5.0"
 log = "0.4.33"
+metaflac = "0.2"
 num_cpus = "1.17.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.*"
@@ -37,7 +36,6 @@ maintenance = { status = "actively-developed" }
 [profile.release]
 #缩小编译后体积
 strip = true
-# strip = "debuginfo" #仅移除debug信息
-lto = true      #启用链接时间优化
-panic = "abort" #panic时直接abort
-opt-level = "z" #优化级别
+lto = true
+panic = "abort"
+opt-level = "z"
