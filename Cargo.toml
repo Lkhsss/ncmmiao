@@ -1,6 +1,6 @@
 [package]
 name = "ncmmiao"
-version = "2.13.26"
+version = "2.13.27"
 edition = "2024"
 authors = ["Lkhsss <lkhsss1019@gmail.com>"]
 description = "A magic tool convert ncm to flac"
@@ -19,7 +19,7 @@ clap = { version = "4.5.*", features = ["derive", "std"] }
 crossbeam-channel = "0.5.15"
 crossterm = "0.29.0"
 env_logger = { version = "0.11.10", default-features = false }
-generic-array = "1.0"
+
 image = "0.25.*"
 indicatif = "0.18.*"
 lazy_static = "1.5.0"
