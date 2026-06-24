@@ -1,6 +1,6 @@
 [package]
 name = "ncmmiao"
-version = "2.12.25"
+version = "2.13.26"
 edition = "2024"
 authors = ["Lkhsss <lkhsss1019@gmail.com>"]
 description = "A magic tool convert ncm to flac"
@@ -14,6 +14,7 @@ keywords = ["ncm", "flac", "neteasemusic"]
 [dependencies]
 aes = "0.9.1"
 audiotags = { version = "0.5.0", default-features = false }
+metaflac = "0.2"
 base64 = { version = "0.22.*" }
 chrono = { version = "0.4.*", features = ["clock"], default-features = false }
 cipher = "0.5"
@@ -41,3 +42,8 @@ strip = true
 lto = true      #启用链接时间优化
 panic = "abort" #panic时直接abort
 opt-level = "z" #优化级别
+
+# debug = true          # 保留调试符号，便于解析
+# opt-level = 3         # 开启最高优化
+# codegen-units = 1     # 提升优化质量
+# lto = "fat"           # 开启链接时优化
