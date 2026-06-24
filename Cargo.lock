@@ -1017,6 +1017,7 @@ dependencies = [
  "lazy_static",
  "log",
  "metaflac",
+ "metaflac",
  "num_cpus",
  "serde",
  "serde_json",

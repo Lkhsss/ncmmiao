@@ -240,6 +240,7 @@ impl Ncmfile {
         let _ = messager.send(Signals::Decrypt);
 
         let mut music_data = Vec::with_capacity((self.size - self.position) as usize);
+        let mut music_data = Vec::with_capacity((self.size - self.position) as usize);
         let mut chunk = vec![0u8; 0x8000];
         loop {
             let n = self
