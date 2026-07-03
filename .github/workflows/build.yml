@@ -143,7 +143,7 @@ jobs:
 
           if [[ "$RUNNER_OS" == "Windows" && matrix.upx == "true" ]]; then
             upx --ultra-brute $executable.exe
-          elif [["$RUNNER_OS" == "Linux" && matrix.upx == "true" ]]; then
+          elif [[ "$RUNNER_OS" == "Linux" && matrix.upx == "true" ]]; then
             upx --ultra-brute $executable
           fi
 
