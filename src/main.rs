@@ -157,7 +157,8 @@ fn main() -> Result<(), AppError> {
                 ignore_count += 1;
                 progressbar.inc(1);
             }
-            Signals::Err(_) => {
+            Signals::Err(e) => {
+                error!("{}", e);
                 failure_count += 1;
                 progressbar.inc(1);
             }
