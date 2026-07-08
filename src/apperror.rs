@@ -15,7 +15,6 @@ pub enum AppError {
     SystemTimeError,
     CannotCreateDir,
     Cancelled,
-    UnsupportedFormat,
 }
 
 impl std::error::Error for AppError {}
@@ -37,7 +36,6 @@ impl std::fmt::Display for AppError {
             Self::SystemTimeError => "获取时间戳失败",
             Self::CannotCreateDir => "无法创建父级目录",
             Self::Cancelled => "任务已取消",
-            Self::UnsupportedFormat => "不支持该音频格式，目前仅支持 FLAC",
         };
         write!(f, "{}", result)
     }

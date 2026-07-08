@@ -3,7 +3,7 @@ use crate::cipher::{self, NEW_KEY_CORE, NEW_KEY_META};
 use crate::messager;
 use base64::{self, Engine};
 use crossterm::style::{Color, Stylize};
-use log::{debug, info, trace};
+use log::{debug, info, trace, warn};
 use messager::Signals;
 use metaflac::Tag as FlacTag;
 use metaflac::block::PictureType;
@@ -161,15 +161,11 @@ impl Ncmfile {
         };
         debug!("{}", meta_data);
 
-        // 仅支持 FLAC 格式
         let format = meta_data
             .get("format")
             .ok_or(AppError::CannotReadMetaInfo)?
             .as_str()
             .ok_or(AppError::CannotReadMetaInfo)?;
-        if format != "flac" {
-            return Err(AppError::UnsupportedFormat);
-        }
 
         trace!("拼接文件路径");
         let path = {
@@ -277,6 +273,12 @@ impl Ncmfile {
             self.get_filename().with(Color::Yellow),
             path.to_str().ok_or(AppError::SaveError)?.with(Color::Cyan)
         );
+        if format == "m4a" {
+            warn!(
+                "[{}] 该文件编码为 AAC 格式，大多数播放器无法播放",
+                self.get_filename().with(Color::Yellow)
+            );
+        }
         info!(
             "[{}]{}",
             self.get_filename().with(Color::Yellow),
