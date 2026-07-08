@@ -161,17 +161,19 @@ impl Ncmfile {
         };
         debug!("{}", meta_data);
 
+        // 仅支持 FLAC 格式
+        let format = meta_data
+            .get("format")
+            .ok_or(AppError::CannotReadMetaInfo)?
+            .as_str()
+            .ok_or(AppError::CannotReadMetaInfo)?;
+        if format != "flac" {
+            return Err(AppError::UnsupportedFormat);
+        }
+
         trace!("拼接文件路径");
         let path = {
-            let output_filename = format!(
-                "{}.{}",
-                self.get_filename(),
-                meta_data
-                    .get("format")
-                    .ok_or(AppError::CannotReadMetaInfo)?
-                    .as_str()
-                    .ok_or(AppError::CannotReadMetaInfo)?
-            );
+            let output_filename = format!("{}.{}", self.get_filename(), format);
             debug!("文件名：{}", output_filename.as_str().with(Color::Yellow));
             outputdir.join(output_filename)
         };

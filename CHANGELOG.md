@@ -5,6 +5,7 @@
 ### Features :sparkles:
 
 - 支持 Ctrl+C 优雅关机，首次按提示等待、再次按强制退出
+- 解析 meta 信息后检查格式，非 FLAC 文件直接拒绝并提示，不写入文件
 
 ### Refactoring
 
