@@ -21,14 +21,14 @@ fn convert_to_arrays(input: &[u8]) -> Result<Vec<Array<u8, U16>>, AppError> {
         .collect::<Result<Vec<_>, _>>()?)
 }
 
-pub fn aes128_to_slice<T: AsRef<[u8]>>(key: &T, blocks: Vec<u8>) -> Result<Vec<u8>, AppError> {
+pub fn aes128_to_slice<T: AsRef<[u8]>>(key: &T, blocks: &[u8]) -> Result<Vec<u8>, AppError> {
     trace!("进行AES128解密");
     let key: &Array<u8, U16> = key
         .as_ref()
         .try_into()
         .map_err(|_| AppError::FileDataError)?;
 
-    let mut blocks = convert_to_arrays(&blocks)?;
+    let mut blocks = convert_to_arrays(blocks)?;
 
     let cipher = Aes128::new(key);
     cipher.decrypt_blocks(&mut blocks);
@@ -65,4 +65,14 @@ pub fn build_decrypt_table(key_data: &[u8]) -> [u8; 256] {
             [(key_box[j] as usize + key_box[(key_box[j] as usize + j) & 0xFF] as usize) & 0xFF];
     }
     table
+}
+
+pub fn parse_key(key: &mut [u8]) {
+    for item in key.iter_mut() {
+        *item ^= 0x64;
+    }
+}
+
+pub fn unpad(data: &[u8]) -> Vec<u8> {
+    data[..data.len() - data[data.len() - 1] as usize].to_vec()
 }

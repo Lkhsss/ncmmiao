@@ -16,7 +16,11 @@ impl Worker {
     fn new(receiver: Receiver<Message>) -> Worker {
         let t = thread::spawn(move || {
             loop {
-                let message = receiver.recv().unwrap();
+                // channel 断开时优雅退出
+                let message = match receiver.recv() {
+                    Ok(m) => m,
+                    Err(_) => break,
+                };
                 match message {
                     Message::NewJob(job) => {
                         job();
@@ -39,9 +43,7 @@ pub struct Pool {
 
 impl Pool {
     pub fn new(max_workers: usize) -> Pool {
-        if max_workers == 0 {
-            panic!("最大线程数不能小于零！")
-        }
+        assert!(max_workers > 0, "最大线程数必须大于零");
         let (tx, rx) = unbounded();
 
         let mut workers = Vec::with_capacity(max_workers);
@@ -60,17 +62,21 @@ impl Pool {
         F: FnOnce() + 'static + Send,
     {
         let job = Message::NewJob(Box::new(f));
-        self.sender.send(job).unwrap();
+        self.sender.send(job).expect("无法向工作线程发送任务");
     }
 
     /// 发送关机信号并等待所有线程退出
     pub fn shutdown(&mut self) {
         for _ in &self.workers {
-            self.sender.send(Message::Shutdown).unwrap();
+            // worker 可能已退出，忽略发送错误
+            let _ = self.sender.send(Message::Shutdown);
         }
         for w in self.workers.iter_mut() {
             if let Some(t) = w.t.take() {
-                t.join().unwrap();
+                // 线程 panic 时打印错误而非 double panic
+                if let Err(e) = t.join() {
+                    eprintln!("工作线程 panic: {e:?}");
+                }
             }
         }
     }

@@ -4,16 +4,20 @@
 
 ### Features :sparkles:
 
-- 支持 Ctrl+C 优雅关机，收到中断信号后等待当前 chunk 解密完成后退出
+- 支持 Ctrl+C 优雅关机，首次按提示等待、再次按强制退出
 
 ### Refactoring
 
-- :hammer: 拆分 ncmdump.rs，加密相关逻辑独立为 cipher.rs 模块
+- :hammer: 拆分 ncmdump.rs，加密、密钥、解密表逻辑独立为 cipher.rs 模块
+- :hammer: 将 parse_key、unpad 从 Ncmfile 移至 cipher
+- :hammer: aes128_to_slice 签名 blocks: Vec<u8> → &[u8]，避免不必要所有权转移
 - :hammer: Ncmfile 移除冗余 position 字段，改用 BufReader.stream_position()
 - :hammer: 删除 debug_info.rs（与 dump 逻辑重复）、test.rs（无效测试）
 - :hammer: 简化 time.rs，移除从未使用的 compare_last/get_time/push_time
 - :hammer: 合并 opendir.rs 中 Linux 和 macOS 的重复代码
-- :hammer: 线程池简化：删除无用 _id 和 max_workers 冗余字段，新增 shutdown() 公开方法
+- :hammer: 线程池简化：删除无用 _id 和 max_workers 字段，新增 shutdown() 公开方法
+- :hammer: 线程池消除 Drop 中的 unwrap/panic，改为 channel 断开时优雅退出
+- :hammer: 删除 logger.rs 中无意义的 #[cfg(target_os)] 重复分支
 
 ### Chore
 

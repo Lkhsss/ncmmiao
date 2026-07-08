@@ -8,7 +8,6 @@ use messager::Signals;
 use metaflac::Tag as FlacTag;
 use metaflac::block::PictureType;
 use serde_json::{self, Value};
-use std::fmt::Debug;
 use std::fs::File;
 use std::io::{BufReader, Cursor, Read, Seek, SeekFrom, Write};
 use std::path::Path;
@@ -77,12 +76,6 @@ impl Ncmfile {
         }
     }
 
-    pub fn parse_key(key: &mut [u8]) {
-        for item in &mut *key {
-            *item ^= 0x64;
-        }
-    }
-
     pub fn is_ncm(data: &[u8]) -> Result<(), AppError> {
         let header = from_utf8(data).map_err(|_| AppError::NotNcmFile)?;
         if header != "CTENFDAM" {
@@ -90,10 +83,6 @@ impl Ncmfile {
         } else {
             Ok(())
         }
-    }
-
-    pub fn unpad(data: &[u8]) -> Vec<u8> {
-        data[..data.len() - data[data.len() - 1] as usize].to_vec()
     }
 
     fn get_filename(&self) -> &str {
@@ -130,9 +119,9 @@ impl Ncmfile {
 
         trace!("读取RC4密钥");
         let mut key_data = self.seekread(key_length)?;
-        Self::parse_key(&mut key_data[..]);
-        let key_data = cipher::aes128_to_slice(&NEW_KEY_CORE, key_data)?;
-        let mut key_data = Self::unpad(&key_data[..]);
+        cipher::parse_key(&mut key_data[..]);
+        let key_data = cipher::aes128_to_slice(&NEW_KEY_CORE, &key_data)?;
+        let mut key_data = cipher::unpad(&key_data[..]);
         key_data.drain(..17);
 
         trace!("获取meta信息数据大小");
@@ -157,8 +146,8 @@ impl Ncmfile {
             {
                 return Err(AppError::CannotReadMetaInfo);
             };
-            let aes_data = cipher::aes128_to_slice(&NEW_KEY_META, decode_data)?;
-            let unpadded = Self::unpad(&aes_data);
+            let aes_data = cipher::aes128_to_slice(&NEW_KEY_META, &decode_data)?;
+            let unpadded = cipher::unpad(&aes_data);
             let json_data = match from_utf8(&unpadded[6..]) {
                 Ok(o) => o.to_owned(),
                 Err(_) => return Err(AppError::CannotReadMetaInfo),

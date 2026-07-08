@@ -5,7 +5,8 @@ use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use log::{LevelFilter, error, info, warn};
 use messager::{Message, Messager, Signals};
-use std::process::exit;
+use std::process;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::{path::Path, sync::Arc};
 
@@ -36,9 +37,16 @@ fn main() -> Result<(), AppError> {
     let cancel = threadpool::cancel_flag();
     {
         let cancel = cancel.clone();
+        let mut ctrlc_count = 0u32;
         ctrlc::set_handler(move || {
-            // error!("用户取消操作");
-            cancel.store(true, std::sync::atomic::Ordering::SeqCst);
+            ctrlc_count += 1;
+            if ctrlc_count == 1 {
+                eprintln!("收到中断信号，正在等待当前任务完成... (再次按 Ctrl+C 强制退出)");
+                cancel.store(true, Ordering::SeqCst);
+            } else {
+                eprintln!("强制退出");
+                process::exit(1);
+            }
         })
         .expect("无法设置 Ctrl+C 信号处理器");
     }
@@ -47,7 +55,7 @@ fn main() -> Result<(), AppError> {
         Ok(t) => t,
         Err(e) => {
             error!("无法初始化时间戳系统。{}", e);
-            exit(1)
+            process::exit(1)
         }
     };
 
@@ -112,7 +120,7 @@ fn main() -> Result<(), AppError> {
             );
         }
 
-        exit(2);
+        process::exit(2);
     };
     // 创建完整的父目录
     if std::fs::create_dir_all(&outputdir).is_err() {

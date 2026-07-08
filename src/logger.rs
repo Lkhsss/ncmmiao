@@ -17,15 +17,6 @@ impl Log for MultiProgressLogger {
 
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
-            #[cfg(target_os = "windows")]
-            let level = match record.level() {
-                log::Level::Error => ("Error").with(Color::Red),
-                log::Level::Warn => ("Warn").with(Color::Yellow),
-                log::Level::Info => ("Info").with(Color::Green),
-                log::Level::Debug => ("Debug").with(Color::Magenta),
-                log::Level::Trace => ("Trace").with(Color::Cyan),
-            };
-            #[cfg(not(target_os = "windows"))]
             let level = match record.level() {
                 log::Level::Error => ("Error").with(Color::Red),
                 log::Level::Warn => ("Warn").with(Color::Yellow),
