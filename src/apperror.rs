@@ -14,6 +14,7 @@ pub enum AppError {
     SaveError,
     SystemTimeError,
     CannotCreateDir,
+    Cancelled,
 }
 
 impl std::error::Error for AppError {}
@@ -34,6 +35,7 @@ impl std::fmt::Display for AppError {
             Self::SaveError => "保存文件出错",
             Self::SystemTimeError => "获取时间戳失败",
             Self::CannotCreateDir => "无法创建父级目录",
+            Self::Cancelled => "任务已取消",
         };
         write!(f, "{}", result)
     }

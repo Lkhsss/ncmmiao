@@ -1,44 +1,39 @@
 use crossbeam_channel::{Receiver, Sender, unbounded};
-use log::debug;
+use std::sync::{Arc, atomic::AtomicBool};
 use std::thread::{self, JoinHandle};
 
 type Job = Box<dyn FnOnce() + 'static + Send>;
 enum Message {
-    ByeBye,
+    Shutdown,
     NewJob(Job),
 }
 
 struct Worker {
-    _id: usize,
     t: Option<JoinHandle<()>>,
 }
 
 impl Worker {
-    fn new(id: usize, receiver: Receiver<Message>) -> Worker {
-        let t = thread::spawn(move || loop {
-            let message = receiver.recv().unwrap();
-            match message {
-                Message::NewJob(job) => {
-                    // debug!("线程[{}]获得任务", id);
-                    job();
-                }
-                Message::ByeBye => {
-                    // debug!("线程[{}]结束任务", id);
-                    break;
+    fn new(receiver: Receiver<Message>) -> Worker {
+        let t = thread::spawn(move || {
+            loop {
+                let message = receiver.recv().unwrap();
+                match message {
+                    Message::NewJob(job) => {
+                        job();
+                    }
+                    Message::Shutdown => {
+                        break;
+                    }
                 }
             }
         });
 
-        Worker {
-            _id: id,
-            t: Some(t),
-        }
+        Worker { t: Some(t) }
     }
 }
 
 pub struct Pool {
     workers: Vec<Worker>,
-    max_workers: usize,
     sender: Sender<Message>,
 }
 
@@ -46,19 +41,16 @@ impl Pool {
     pub fn new(max_workers: usize) -> Pool {
         if max_workers == 0 {
             panic!("最大线程数不能小于零！")
-        } else {
-            debug!("将开启{}线程", max_workers);
         }
         let (tx, rx) = unbounded();
 
         let mut workers = Vec::with_capacity(max_workers);
-        for i in 0..max_workers {
-            workers.push(Worker::new(i, rx.clone()));
+        for _ in 0..max_workers {
+            workers.push(Worker::new(rx.clone()));
         }
 
         Pool {
             workers,
-            max_workers,
             sender: tx,
         }
     }
@@ -70,12 +62,11 @@ impl Pool {
         let job = Message::NewJob(Box::new(f));
         self.sender.send(job).unwrap();
     }
-}
 
-impl Drop for Pool {
-    fn drop(&mut self) {
-        for _ in 0..self.max_workers {
-            self.sender.send(Message::ByeBye).unwrap();
+    /// 发送关机信号并等待所有线程退出
+    pub fn shutdown(&mut self) {
+        for _ in &self.workers {
+            self.sender.send(Message::Shutdown).unwrap();
         }
         for w in self.workers.iter_mut() {
             if let Some(t) = w.t.take() {
@@ -83,4 +74,15 @@ impl Drop for Pool {
             }
         }
     }
+}
+
+impl Drop for Pool {
+    fn drop(&mut self) {
+        self.shutdown();
+    }
+}
+
+/// 全局取消标志，用于优雅关机
+pub fn cancel_flag() -> Arc<AtomicBool> {
+    Arc::new(AtomicBool::new(false))
 }

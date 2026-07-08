@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## [2.14.0] - 2026.7.8
+
+### Features :sparkles:
+
+- 支持 Ctrl+C 优雅关机，收到中断信号后等待当前 chunk 解密完成后退出
+
+### Refactoring
+
+- :hammer: 拆分 ncmdump.rs，加密相关逻辑独立为 cipher.rs 模块
+- :hammer: Ncmfile 移除冗余 position 字段，改用 BufReader.stream_position()
+- :hammer: 删除 debug_info.rs（与 dump 逻辑重复）、test.rs（无效测试）
+- :hammer: 简化 time.rs，移除从未使用的 compare_last/get_time/push_time
+- :hammer: 合并 opendir.rs 中 Linux 和 macOS 的重复代码
+- :hammer: 线程池简化：删除无用 _id 和 max_workers 冗余字段，新增 shutdown() 公开方法
+
+### Chore
+
+- :heavy_minus_sign: 移除未使用依赖：mp4ameta、env_logger、image、serde
+- :arrow_up: log 显式启用 std feature
+
 ## [2.13.27] - 2026.6.25
 
 ### Fixed :bug:

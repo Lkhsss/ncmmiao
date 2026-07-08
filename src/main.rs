@@ -10,13 +10,13 @@ use std::time::Duration;
 use std::{path::Path, sync::Arc};
 
 mod apperror;
+mod cipher;
 mod clap;
 mod logger;
 mod messager;
 mod ncmdump;
 mod opendir;
 mod pathparse;
-mod test;
 mod threadpool;
 mod time;
 use apperror::AppError;
@@ -32,7 +32,18 @@ fn main() -> Result<(), AppError> {
         }
     };
 
-    let mut timer = match TimeCompare::new() {
+    // 全局取消标志
+    let cancel = threadpool::cancel_flag();
+    {
+        let cancel = cancel.clone();
+        ctrlc::set_handler(move || {
+            // error!("用户取消操作");
+            cancel.store(true, std::sync::atomic::Ordering::SeqCst);
+        })
+        .expect("无法设置 Ctrl+C 信号处理器");
+    }
+
+    let timer = match TimeCompare::new() {
         Ok(t) => t,
         Err(e) => {
             error!("无法初始化时间戳系统。{}", e);
@@ -90,6 +101,7 @@ fn main() -> Result<(), AppError> {
     let mut success_count = 0;
     let mut ignore_count = 0;
     let mut failure_count = 0;
+    let mut cancelled_count = 0;
 
     if taskcount == 0 {
         if cli.autoopen {
@@ -118,9 +130,10 @@ fn main() -> Result<(), AppError> {
         let output = outputdir.clone();
         let senderin: Sender<Message> = tx.clone();
         let senderon: Sender<Message> = tx.clone();
+        let cancel = cancel.clone();
         // 多线程
         pool.execute(move || match Ncmfile::new(filepath.as_str()) {
-            Ok(mut n) => match n.dump(Path::new(&output), senderin, forcesave) {
+            Ok(mut n) => match n.dump(Path::new(&output), senderin, forcesave, cancel) {
                 Ok(_) => {}
                 Err(e) => {
                     let messager = Messager::new(senderon);
@@ -157,6 +170,10 @@ fn main() -> Result<(), AppError> {
                 ignore_count += 1;
                 progressbar.inc(1);
             }
+            Signals::Err(AppError::Cancelled) => {
+                cancelled_count += 1;
+                progressbar.inc(1);
+            }
             Signals::Err(e) => {
                 error!("{}", e);
                 failure_count += 1;
@@ -164,7 +181,7 @@ fn main() -> Result<(), AppError> {
             }
             _ => (),
         }
-        if (success_count + ignore_count + failure_count) >= taskcount {
+        if (success_count + ignore_count + failure_count + cancelled_count) >= taskcount {
             break;
         }
     }
@@ -179,10 +196,11 @@ fn main() -> Result<(), AppError> {
         }
     };
     info!(
-        "成功解密{}个文件,跳过{}个文件,{}个文件解密失败，{}",
+        "成功解密{}个文件,跳过{}个文件,{}个文件解密失败,{}个文件被取消，{}",
         success_count.to_string().with(Color::Green),
         ignore_count.to_string().with(Color::Magenta),
         failure_count.to_string().with(Color::Red),
+        cancelled_count.to_string().with(Color::Yellow),
         showtime()
     );
 
