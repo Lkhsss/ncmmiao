@@ -15,7 +15,7 @@ pub fn pathparse(input: Vec<String>) -> Vec<String> {
                 }
             }
         } else if path.is_dir() {
-            for entry in WalkDir::new(path) {
+            for entry in WalkDir::new(path).min_depth(1) {
                 let new_entry = match entry {
                     Ok(e) => e,
                     Err(e) => {
