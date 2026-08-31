@@ -77,6 +77,29 @@ ncmmiao -vvv
 
 以此类推
 
+### 作为库使用
+
+本项目的核心解密逻辑同时以 Rust 库的形式提供（`src/lib.rs`），`src/main.rs` 仅负责命令行界面。在其他 Rust 项目中可以直接引用：
+
+```toml
+[dependencies]
+ncmmiao = { git = "https://github.com/lkhsss/ncmmiao" }
+```
+
+```rust
+use ncmmiao::Ncmfile;
+use std::path::Path;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+
+let mut ncm = Ncmfile::new("song.ncm")?;
+let (tx, _rx) = crossbeam_channel::unbounded::<ncmmiao::Message>();
+let cancel = Arc::new(AtomicBool::new(false));
+ncm.dump(Path::new("output/"), tx, false, cancel)?;
+```
+
+也可以直接运行仓库内示例：`cargo run --example dump_single -- "song.ncm" "output/"`
+
 ---
 
 # TODO :construction:

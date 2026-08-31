@@ -76,3 +76,36 @@ pub fn parse_key(key: &mut [u8]) {
 pub fn unpad(data: &[u8]) -> Vec<u8> {
     data[..data.len() - data[data.len() - 1] as usize].to_vec()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unpad_removes_trailing_padding() {
+        let data = vec![b'a', b'b', b'c', 0x01];
+        assert_eq!(unpad(&data), vec![b'a', b'b', b'c']);
+    }
+
+    #[test]
+    fn parse_key_xors_with_0x64() {
+        let mut key = vec![0x00, 0x64, 0xFF];
+        parse_key(&mut key);
+        assert_eq!(key, vec![0x64, 0x00, 0x9B]);
+    }
+
+    #[test]
+    fn build_decrypt_table_is_256_bytes() {
+        let table = build_decrypt_table(&[0x01, 0x02, 0x03]);
+        assert_eq!(table.len(), 256);
+    }
+
+    #[test]
+    fn aes128_to_slice_rejects_non_block_aligned_input() {
+        assert!(matches!(
+            aes128_to_slice(&NEW_KEY_CORE, &[0u8; 15]),
+            Err(AppError::FileDataError)
+        ));
+    }
+}
+

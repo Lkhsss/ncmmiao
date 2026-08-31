@@ -4,25 +4,16 @@ use crossterm::style::{Color, Stylize};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use log::{LevelFilter, error, info, warn};
-use messager::{Message, Messager, Signals};
+use ncmmiao::time::TimeCompare;
+use ncmmiao::{AppError, Ncmfile, Signal, pathparse, threadpool};
 use std::process;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::{path::Path, sync::Arc};
 
-mod apperror;
-mod cipher;
 mod clap;
 mod logger;
-mod messager;
-mod ncmdump;
 mod opendir;
-mod pathparse;
-mod threadpool;
-mod time;
-use apperror::AppError;
-use ncmdump::Ncmfile;
-use time::TimeCompare;
 
 fn main() -> Result<(), AppError> {
     // 初始化日志系统
@@ -136,21 +127,19 @@ fn main() -> Result<(), AppError> {
     // 循环开始
     for filepath in undumpfile {
         let output = outputdir.clone();
-        let senderin: Sender<Message> = tx.clone();
-        let senderon: Sender<Message> = tx.clone();
+        let senderin: Sender<Signal> = tx.clone();
+        let senderon: Sender<Signal> = tx.clone();
         let cancel = cancel.clone();
         // 多线程
         pool.execute(move || match Ncmfile::new(filepath.as_str()) {
             Ok(mut n) => match n.dump(Path::new(&output), senderin, forcesave, cancel) {
                 Ok(_) => {}
                 Err(e) => {
-                    let messager = Messager::new(senderon);
-                    let _ = messager.send(Signals::Err(e));
+                    let _ = senderon.send(Signal::Err(e));
                 }
             },
             Err(e) => {
-                let messager = Messager::new(senderon);
-                let _ = messager.send(Signals::Err(e));
+                let _ = senderon.send(Signal::Err(e));
             }
         });
     }
@@ -168,21 +157,21 @@ fn main() -> Result<(), AppError> {
     let progressbar = MP.add(pb);
 
     // 接受消息
-    for messages in rx {
-        match messages.signal {
-            Signals::End => {
+    for signal in rx {
+        match signal {
+            Signal::End => {
                 success_count += 1;
                 progressbar.inc(1);
             }
-            Signals::Err(AppError::ProtectFile) => {
+            Signal::Err(AppError::ProtectFile) => {
                 ignore_count += 1;
                 progressbar.inc(1);
             }
-            Signals::Err(AppError::Cancelled) => {
+            Signal::Err(AppError::Cancelled) => {
                 cancelled_count += 1;
                 progressbar.inc(1);
             }
-            Signals::Err(e) => {
+            Signal::Err(e) => {
                 error!("{}", e);
                 failure_count += 1;
                 progressbar.inc(1);

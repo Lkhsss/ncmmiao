@@ -1,10 +1,8 @@
 use crate::apperror::AppError;
 use crate::cipher::{self, NEW_KEY_CORE, NEW_KEY_META};
-use crate::messager;
+use crate::messager::{self, Signal};
 use base64::{self, Engine};
-use crossterm::style::{Color, Stylize};
 use log::{debug, info, trace, warn};
-use messager::Signals;
 use metaflac::Tag as FlacTag;
 use metaflac::block::PictureType;
 use serde_json::{self, Value};
@@ -94,12 +92,11 @@ impl Ncmfile {
     pub fn dump(
         &mut self,
         outputdir: &Path,
-        tx: crossbeam_channel::Sender<messager::Message>,
+        tx: crossbeam_channel::Sender<messager::Signal>,
         force_save: bool,
         cancel: Arc<AtomicBool>,
     ) -> Result<(), AppError> {
-        let messager = messager::Messager::new(tx);
-        let _ = messager.send(Signals::Start);
+        let _ = tx.send(Signal::Start);
 
         trace!("读取magic header");
         let magic_header = self.seekread(8)?;
@@ -130,7 +127,7 @@ impl Ncmfile {
                 .try_into()
                 .map_err(|_| AppError::FileDataError)?,
         ) as u64;
-        let _ = messager.send(Signals::GetMetaInfo);
+        let _ = tx.send(Signal::GetMetaInfo);
 
         trace!("读取meta信息");
         let meta_data = {
@@ -170,7 +167,7 @@ impl Ncmfile {
         trace!("拼接文件路径");
         let path = {
             let output_filename = format!("{}.{}", self.get_filename(), format);
-            debug!("文件名：{}", output_filename.as_str().with(Color::Yellow));
+            debug!("文件名：{}", output_filename.as_str());
             outputdir.join(output_filename)
         };
 
@@ -185,7 +182,7 @@ impl Ncmfile {
         trace!("跳过5个字节");
         self.skip(5)?;
 
-        let _ = messager.send(Signals::GetCover);
+        let _ = tx.send(Signal::GetCover);
         trace!("获取图片数据的大小");
         let image_data_length = u32::from_le_bytes(
             self.seekread(4)?
@@ -199,7 +196,7 @@ impl Ncmfile {
         let decrypt_table = cipher::build_decrypt_table(&key_data);
 
         trace!("解密音乐数据");
-        let _ = messager.send(Signals::Decrypt);
+        let _ = tx.send(Signal::Decrypt);
 
         let remaining = self.size
             - self
@@ -226,7 +223,7 @@ impl Ncmfile {
             music_data.extend_from_slice(&chunk[..n]);
         }
 
-        let _ = messager.send(Signals::Save);
+        let _ = tx.send(Signal::Save);
 
         let extension = path
             .extension()
@@ -270,21 +267,33 @@ impl Ncmfile {
 
         info!(
             "[{}] 文件已保存到: {}",
-            self.get_filename().with(Color::Yellow),
-            path.to_str().ok_or(AppError::SaveError)?.with(Color::Cyan)
+            self.get_filename(),
+            path.to_str().ok_or(AppError::SaveError)?
         );
         if format == "m4a" {
             warn!(
                 "[{}] 该文件编码为 AAC 格式，大多数播放器无法播放",
-                self.get_filename().with(Color::Yellow)
+                self.get_filename()
             );
         }
-        info!(
-            "[{}]{}",
-            self.get_filename().with(Color::Yellow),
-            "解密成功".with(Color::Green)
-        );
-        let _ = messager.send(Signals::End);
+        info!("[{}]解密成功", self.get_filename());
+        let _ = tx.send(Signal::End);
         Ok(())
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn valid_magic_header() {
+        assert!(Ncmfile::is_ncm(b"CTENFDAM").is_ok());
+        assert!(matches!(
+            Ncmfile::is_ncm(b"NOTHEAD!"),
+            Err(AppError::NotNcmFile)
+        ));
+        assert!(matches!(Ncmfile::is_ncm(&[]), Err(AppError::NotNcmFile)));
     }
 }
