@@ -73,8 +73,12 @@ pub fn parse_key(key: &mut [u8]) {
     }
 }
 
+/// 去除 PKCS#7 填充；数据为空或填充字节非法时原样返回，避免越界 panic
 pub fn unpad(data: &[u8]) -> Vec<u8> {
-    data[..data.len() - data[data.len() - 1] as usize].to_vec()
+    match data.last() {
+        Some(&pad) if (pad as usize) <= data.len() => data[..data.len() - pad as usize].to_vec(),
+        _ => data.to_vec(),
+    }
 }
 
 #[cfg(test)]

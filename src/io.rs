@@ -1,5 +1,4 @@
 use std::ffi::OsStr;
-use std::os::windows::fs::FileExt;
 use std::str::from_utf8;
 use std::{
     fs::File,
@@ -11,7 +10,7 @@ use crate::{AppError, Ncmfile};
 
 impl Ncmfile {
     pub fn new(filepath: &str) -> Result<Ncmfile, AppError> {
-        let file = File::open(filepath).map_err(AppError::FileReadError)?;
+        let mut file = File::open(filepath).map_err(AppError::FileReadError)?;
         let size = file
             .metadata()
             .map_err(|_| AppError::CannotReadMetaInfo)?
@@ -22,11 +21,11 @@ impl Ncmfile {
             .to_str()
             .ok_or(AppError::CannotReadFileName)?
             .to_string();
-        // 校验文件是否为ncm
-        let mut magic_header = vec![0; 8];
-
-        let _ = file
-            .seek_read(&mut magic_header, 0)
+        // 校验文件是否为ncm：读取前8字节后复位游标（跨平台，不改变读取位置）
+        let mut magic_header = [0u8; 8];
+        file.read_exact(&mut magic_header)
+            .map_err(AppError::FileReadError)?;
+        file.seek(SeekFrom::Start(0))
             .map_err(AppError::FileReadError)?;
         Self::is_ncm(&magic_header)?;
 
@@ -36,41 +35,33 @@ impl Ncmfile {
             size,
         })
     }
-    // 允许短读，增加容错
+    pub(crate) fn seek(&mut self, pos: SeekFrom) -> Result<u64, AppError> {
+        self.reader.seek(pos).map_err(AppError::FileReadError)
+    }
+    // 允许短读，增加容错：请求长度超过剩余字节时读取实际剩余部分
     pub(crate) fn seekread(&mut self, length: u64) -> Result<Vec<u8>, AppError> {
         let pos = self
             .reader
             .stream_position()
             .map_err(AppError::FileReadError)?;
-        let rest_len = self.size - pos;
-        if rest_len > length {
-            let mut buf = vec![0; length as usize];
-            self.reader
-                .read_exact(&mut buf)
-                .map_err(AppError::FileReadError)?;
-            Ok(buf)
-        } else if rest_len < length && rest_len > 0 {
-            let mut buf = vec![0; rest_len as usize];
-            self.reader
-                .read_exact(&mut buf)
-                .map_err(AppError::FileReadError)?;
-            Ok(buf)
-        } else {
-            Ok(Vec::with_capacity(0))
+        // saturating_sub：游标可能被 skip 越过文件末尾，避免 u64 下溢
+        let read_len = self.size.saturating_sub(pos).min(length);
+        if read_len == 0 {
+            return Ok(Vec::new());
         }
+        let mut buf = vec![0; read_len as usize];
+        self.reader
+            .read_exact(&mut buf)
+            .map_err(AppError::FileReadError)?;
+        Ok(buf)
     }
     //跟随linux的标准行为，不约束seek范围
     pub(crate) fn skip(&mut self, length: u64) -> Result<u64, AppError> {
-        // let pos = self
-        //     .reader
-        //     .stream_position()
-        //     .map_err(AppError::FileReadError)?;
-
+        let length = i64::try_from(length).map_err(|_| AppError::NumParseError)?;
         self.reader
-            .seek(SeekFrom::Current(length as i64))
+            .seek(SeekFrom::Current(length))
             .map_err(AppError::FileReadError)?;
-
-        Ok(length)
+        Ok(length as u64)
     }
 
     pub fn is_ncm(data: &[u8]) -> Result<(), AppError> {
