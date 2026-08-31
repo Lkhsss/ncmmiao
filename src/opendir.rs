@@ -1,3 +1,7 @@
+//! 二进制专用的"自动打开输出文件夹"辅助模块。
+//!
+//! 这是纯 CLI 功能，不属于解密库的公开 API，因此放在 `src/main.rs` 侧。
+
 use crossterm::style::{Color, Stylize};
 use log::{error, info};
 use std::{path::PathBuf, process::Command};

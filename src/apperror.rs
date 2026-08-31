@@ -1,4 +1,4 @@
-#[derive(Debug, PartialEq, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 #[allow(dead_code)]
 pub enum AppError {
     #[error("该文件不为NCM格式")]
@@ -9,8 +9,8 @@ pub enum AppError {
     CannotReadMetaInfo,
     #[error("封面无法保存")]
     CoverCannotSave,
-    #[error("读取文件时发生错误")]
-    FileReadError,
+    #[error("读取文件时发生错误: {0}")]
+    FileReadError(std::io::Error),
     #[error("跳过数据时出错。可能是文件大小小于预期")]
     FileSkipError,
     #[error("写入文件时错误")]
@@ -29,6 +29,6 @@ pub enum AppError {
     CannotCreateDir,
     #[error("任务已取消")]
     Cancelled,
+    #[error("数字转换失败")]
+    NumParseError
 }
-
-

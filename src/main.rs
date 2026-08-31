@@ -1,13 +1,15 @@
 use ::clap::Parser;
-use crossbeam_channel::{Sender, bounded};
+use crossbeam_channel::bounded;
 use crossterm::style::{Color, Stylize};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use log::{LevelFilter, error, info, warn};
 use ncmmiao::time::TimeCompare;
 use ncmmiao::{AppError, Ncmfile, Signal, pathparse, threadpool};
+
 use std::process;
 use std::sync::atomic::Ordering;
+use std::thread::{self, JoinHandle};
 use std::time::Duration;
 use std::{path::Path, sync::Arc};
 
@@ -121,59 +123,116 @@ fn main() -> Result<(), AppError> {
     let pool = threadpool::Pool::new(max_workers);
 
     info!("将启用{}线程", max_workers.to_string().with(Color::Green));
-    // 初始化通讯
-    let (tx, rx) = bounded(max_workers * 6);
 
-    // 循环开始
-    for filepath in undumpfile {
+    // 文件名（用于每文件进度条的显示）
+    let names: Vec<String> = undumpfile
+        .iter()
+        .map(|p| {
+            Path::new(p)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or(p.as_str())
+                .to_string()
+        })
+        .collect();
+
+    // 初始化通讯：全局通道携带 (文件索引, 信号)，由转发线程完成文件归因
+    let (tx, rx) = bounded::<(usize, Signal)>(max_workers * 6);
+
+    // 循环开始：每文件独立 channel + 转发线程，使进度信号能归因到具体文件
+    let mut forwarders: Vec<JoinHandle<()>> = Vec::with_capacity(taskcount);
+    for (i, filepath) in undumpfile.iter().enumerate() {
+        let (file_tx, file_rx) = bounded::<Signal>(16);
+        let tx = tx.clone();
+        forwarders.push(thread::spawn(move || {
+            while let Ok(s) = file_rx.recv() {
+                if tx.send((i, s)).is_err() {
+                    break;
+                }
+            }
+        }));
+
         let output = outputdir.clone();
-        let senderin: Sender<Signal> = tx.clone();
-        let senderon: Sender<Signal> = tx.clone();
         let cancel = cancel.clone();
+        let filepath = filepath.clone();
         // 多线程
         pool.execute(move || match Ncmfile::new(filepath.as_str()) {
-            Ok(mut n) => match n.dump(Path::new(&output), senderin, forcesave, cancel) {
+            Ok(mut n) => match n.dump_to_file(Path::new(&output), Some(file_tx.clone()), forcesave, cancel)
+            {
                 Ok(_) => {}
                 Err(e) => {
-                    let _ = senderon.send(Signal::Err(e));
+                    let _ = file_tx.send(Signal::Err(e));
                 }
             },
             Err(e) => {
-                let _ = senderon.send(Signal::Err(e));
+                let _ = file_tx.send(Signal::Err(e));
             }
         });
     }
 
-    //进度条
-    let pb = ProgressBar::new(taskcount as u64)
-        .with_elapsed(Duration::from_millis(50))
-        .with_style(
-            ProgressStyle::default_bar()
-                .progress_chars("#>-")
-                .template("{spinner:.green} [{wide_bar:.cyan/blue}] {percent_precise}% ({eta})")
-                .unwrap(),
-        )
-        .with_message("解密中");
-    let progressbar = MP.add(pb);
+    //总进度条（已完成文件数）
+    let total_style = ProgressStyle::default_bar()
+        .progress_chars("#>-")
+        .template("{spinner:.green} 总进度 [{wide_bar:.cyan/blue}] {percent_precise}% ({eta})")
+        .unwrap();
+    let progressbar = MP.add(
+        ProgressBar::new(taskcount as u64)
+            .with_elapsed(Duration::from_millis(50))
+            .with_style(total_style),
+    );
+
+    //每文件进度条样式（Signal::Start 到达时才创建）
+    let file_style = ProgressStyle::default_bar()
+        .progress_chars("#>-")
+        .template("{spinner:.green} {msg:.cyan} [{wide_bar:.cyan/blue}] {percent_precise}%")
+        .unwrap();
+    let mut file_bars: Vec<Option<ProgressBar>> = vec![None; taskcount];
 
     // 接受消息
-    for signal in rx {
+    for (i, signal) in rx {
         match signal {
+            Signal::Start => {
+                // 文件开始处理时创建该文件的进度条（长度固定为 100 表示百分比）
+                let bar = MP.add(
+                    ProgressBar::new(100)
+                        .with_style(file_style.clone())
+                        .with_message(names[i].clone()),
+                );
+                file_bars[i] = Some(bar);
+            }
+            Signal::Decrypt(progress) => {
+                // 按字节进度更新该文件进度条（progress 为 0.0~1.0）
+                if let Some(bar) = &file_bars[i] {
+                    bar.set_position((progress * 100.0).round() as u64);
+                }
+            }
             Signal::End => {
                 success_count += 1;
+                if let Some(bar) = file_bars[i].take() {
+                    bar.finish_and_clear();
+                }
                 progressbar.inc(1);
             }
             Signal::Err(AppError::ProtectFile) => {
                 ignore_count += 1;
+                if let Some(bar) = file_bars[i].take() {
+                    bar.finish_and_clear();
+                }
                 progressbar.inc(1);
             }
             Signal::Err(AppError::Cancelled) => {
                 cancelled_count += 1;
+                if let Some(bar) = file_bars[i].take() {
+                    bar.finish_and_clear();
+                }
                 progressbar.inc(1);
             }
             Signal::Err(e) => {
                 error!("{}", e);
                 failure_count += 1;
+                if let Some(bar) = file_bars[i].take() {
+                    bar.finish_and_clear();
+                }
                 progressbar.inc(1);
             }
             _ => (),
@@ -183,6 +242,11 @@ fn main() -> Result<(), AppError> {
         }
     }
     progressbar.finish_and_clear();
+
+    // 等待所有转发线程退出
+    for f in forwarders {
+        let _ = f.join();
+    }
 
     let timecount = timer.compare_start().unwrap();
     let showtime = || {

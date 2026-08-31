@@ -93,9 +93,9 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 let mut ncm = Ncmfile::new("song.ncm")?;
-let (tx, _rx) = crossbeam_channel::unbounded::<ncmmiao::Message>();
+let (tx, _rx) = crossbeam_channel::unbounded::<ncmmiao::Signal>();
 let cancel = Arc::new(AtomicBool::new(false));
-ncm.dump(Path::new("output/"), tx, false, cancel)?;
+ncm.dump_to_file(Path::new("output/"), Some(tx), false, cancel)?;
 ```
 
 也可以直接运行仓库内示例：`cargo run --example dump_single -- "song.ncm" "output/"`

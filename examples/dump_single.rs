@@ -30,7 +30,7 @@ fn main() -> Result<(), AppError> {
     let cancel = Arc::new(AtomicBool::new(false));
 
     // 3. 调用核心解密逻辑（库 API），等价于命令行 `ncmmiao -i input -o output_dir`
-    ncm.dump(Path::new(output_dir), tx, false, cancel)?;
+    ncm.dump_to_file(Path::new(output_dir), Some(tx), false, cancel)?;
 
     println!("解密完成，输出目录: {}", output_dir);
     Ok(())
