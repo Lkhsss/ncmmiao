@@ -1,5 +1,30 @@
 # CHANGELOG
 
+## [3.14.0] - 2026.9.1
+
+### Features :sparkles:
+
+- 解密进度条升级：`Signal::Decrypt(f64)` 按字节上报进度（0.0~1.0），MultiProgress 为每个文件单独建立进度条；多文件并发时通过每文件独立通道 + 转发线程实现进度信号的精确归因
+- 库 API 拆分：新增 `Ncmfile::dump`（解密后直接返回音乐字节，不保存文件）；原 `dump` 更名 `dump_to_file`（解密并保存到输出目录）
+- 新增便捷读取函数：`get_music_info`（返回原始 JSON 字符串）、`get_pic`（返回封面数据）、`get_music_data`（返回解密音乐并携带进度信号）；三者均自动归位游标、可任意顺序调用
+- 信号发送器可选化：`tx` 改为 `Option<Sender<Signal>>`，传 `None` 时静默跳过进度上报
+- 新增 `NumParseError` 错误类型
+
+### Fixed :bug:
+
+- 修复 `get_pic`/`get_music_data` 漏跳 meta 后固定 9 字节（4+5），导致封面与音乐数据读取错位的严重 bug
+- 修复 `seekread` 在剩余字节恰好等于请求长度时误返回空数据的边界问题
+- 修复 `seekread`/`skip` 越过文件末尾时 u64 减法下溢 panic
+- 修复 meta 数据不足 22 字节、RC4 密钥不足 17 字节时的越界 panic；`unpad` 增加空数据/非法填充防护
+- `get_music_info` 改为返回解析前的原始 JSON 字符串（此前返回重序列化结果，键序被打乱）
+- `ProtectFile` 检查提前到读取封面/解密之前，已存在文件不再浪费解密计算
+
+### Refactoring
+
+- :hammer: 文件头（magic）校验提前到 `Ncmfile::new`，改为跨平台实现（不再依赖 Windows 专属 API）
+- :hammer: 提取 `read_key`/`read_meta`/`read_cover`/`skip_meta`/`skip_cover`/`decrypt_music`/`parse_meta` 等内部 helper，消除 4 处重复的文件头解析
+- :hammer: 底层读取 `seekread` 允许短读（文件截断容错），`skip` 跟随 Linux 行为不约束 seek 范围
+
 ## [2.14.0] - 2026.7.8
 
 ### Features :sparkles:
