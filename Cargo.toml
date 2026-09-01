@@ -28,7 +28,7 @@ ctrlc = "3.5.2"
 thiserror = "2.0.20"
 
 [badges]
-maintenance = { status = "actively-developed" }
+maintenance = { status = "passively-maintained" }
 
 [profile.release]
 #缩小编译后体积
