@@ -27,13 +27,6 @@ impl<T> Messager<T> {
         }
     }
 }
-/// 解密得到的数据：音乐字节、封面字节与音频格式
-struct DecryptedData {
-    music_data: Vec<u8>,
-    cover_data: Vec<u8>,
-    format: String,
-}
-
 /// 解析出的 meta 信息：原始 JSON 字符串与结构化对象
 struct MetaInfo {
     raw: String,
@@ -134,6 +127,13 @@ impl Ncmfile {
         self.seekread(image_length)
     }
 
+    /// 跳过封面数据（调用后游标位于音乐数据处）
+    fn skip_cover(&mut self) -> Result<(), AppError> {
+        let image_length = self.read_u32()? as u64;
+        self.skip(image_length)?;
+        Ok(())
+    }
+
     /// 解密剩余音乐数据，并按字节发送进度信号（0.0~1.0）
     fn decrypt_music(
         &mut self,
@@ -216,7 +216,7 @@ impl Ncmfile {
         let _ = sender.send(Signal::GetMetaInfo);
         self.skip_meta()?;
         let _ = sender.send(Signal::GetCover);
-        let _ = self.read_cover()?;
+        self.skip_cover()?;
         self.decrypt_music(&key_data, &sender, cancel.as_ref())
     }
 
@@ -227,21 +227,13 @@ impl Ncmfile {
         cancel: Arc<AtomicBool>,
     ) -> Result<Vec<u8>, AppError> {
         let sender = Messager(tx);
-        let data = self.parse_and_decrypt(&sender, cancel.as_ref())?;
-        Ok(data.music_data)
+        self.parse_and_decrypt(&sender, cancel.as_ref())
     }
 
-    /// 解析 ncm 文件并解密音乐数据（含封面与格式），期间发送进度信号。
-    fn parse_and_decrypt(
-        &mut self,
-        sender: &Messager<Signal>,
-        cancel: &AtomicBool,
-    ) -> Result<DecryptedData, AppError> {
-        let _ = sender.send(Signal::Start);
-        // 文件头（magic）校验已在 Ncmfile::new 中完成
+    /// 解析 RC4 密钥与 meta 信息，返回 (key_data, format)。
+    /// 调用后游标位于 image_length 字段。
+    fn parse_meta(&mut self) -> Result<(Vec<u8>, String), AppError> {
         let key_data = self.read_key()?;
-        let _ = sender.send(Signal::GetMetaInfo);
-
         let meta = self.read_meta()?;
         let format = meta
             .value
@@ -249,16 +241,23 @@ impl Ncmfile {
             .and_then(|v| v.as_str())
             .ok_or(AppError::CannotReadMetaInfo)?
             .to_string();
+        Ok((key_data, format))
+    }
+
+    /// 解析 ncm 文件并解密音乐数据，期间发送进度信号，返回解密后的音乐字节。
+    fn parse_and_decrypt(
+        &mut self,
+        sender: &Messager<Signal>,
+        cancel: &AtomicBool,
+    ) -> Result<Vec<u8>, AppError> {
+        let _ = sender.send(Signal::Start);
+        let (key_data, _) = self.parse_meta()?;
+        let _ = sender.send(Signal::GetMetaInfo);
+
         let _ = sender.send(Signal::GetCover);
-        let cover_data = self.read_cover()?;
+        self.skip_cover()?;
 
-        let music_data = self.decrypt_music(&key_data, sender, cancel)?;
-
-        Ok(DecryptedData {
-            music_data,
-            cover_data,
-            format,
-        })
+        self.decrypt_music(&key_data, sender, cancel)
     }
 
     /// 全自动的解密函数
@@ -270,9 +269,11 @@ impl Ncmfile {
         cancel: Arc<AtomicBool>,
     ) -> Result<(), AppError> {
         let sender = Messager(tx);
-        let data = self.parse_and_decrypt(&sender, cancel.as_ref())?;
-        let format = &data.format;
+        let _ = sender.send(Signal::Start);
+        let (key_data, format) = self.parse_meta()?;
+        let _ = sender.send(Signal::GetMetaInfo);
 
+        // 先构造输出路径并做保护性检查（在读取封面/解密之前快速失败）
         trace!("拼接文件路径");
         let path = {
             let output_filename = format!("{}.{}", self.get_filename(), format);
@@ -285,6 +286,10 @@ impl Ncmfile {
             return Err(AppError::ProtectFile);
         }
 
+        let _ = sender.send(Signal::GetCover);
+        let cover_data = self.read_cover()?;
+        let music_data = self.decrypt_music(&key_data, &sender, cancel.as_ref())?;
+
         let _ = sender.send(Signal::Save);
 
         let extension = path
@@ -295,34 +300,34 @@ impl Ncmfile {
         // 根据格式分别嵌入封面
         match extension {
             "flac" => {
-                let mut cursor = Cursor::new(&data.music_data[..]);
+                let mut cursor = Cursor::new(&music_data[..]);
                 let mut tag =
                     FlacTag::read_from(&mut cursor).map_err(|_| AppError::CoverCannotSave)?;
                 tag.add_picture(
                     "image/jpeg".to_string(),
                     PictureType::CoverFront,
-                    data.cover_data,
+                    cover_data,
                 );
                 let mut file = File::create(&path).map_err(|_| AppError::FileWriteError)?;
                 tag.write_to(&mut file)
                     .map_err(|_| AppError::CoverCannotSave)?;
-                file.write_all(&data.music_data)
+                file.write_all(&music_data)
                     .map_err(|_| AppError::FileWriteError)?;
             }
             // "mp4" | "m4a" | "m4b" | "m4r" | "m4v" => {
-            //     let mut cursor = Cursor::new(&data.music_data[..]);
+            //     let mut cursor = Cursor::new(&music_data[..]);
             //     let mut tag =
             //         Mp4Tag::read_from(&mut cursor).map_err(|_| AppError::CoverCannotSave)?;
-            //     tag.set_artwork(Img::jpeg(data.cover_data));
+            //     tag.set_artwork(Img::jpeg(cover_data));
             //     let mut file = File::create(&path).map_err(|_| AppError::FileWriteError)?;
             //     tag.write_to(&mut file)
             //         .map_err(|_| AppError::CoverCannotSave)?;
-            //     file.write_all(&data.music_data)
+            //     file.write_all(&music_data)
             //         .map_err(|_| AppError::FileWriteError)?;
             // }
             _ => {
                 let mut file = File::create(&path).map_err(|_| AppError::FileWriteError)?;
-                file.write_all(&data.music_data)
+                file.write_all(&music_data)
                     .map_err(|_| AppError::FileWriteError)?;
             }
         }
@@ -437,14 +442,15 @@ mod tests {
         let mut ncm = Ncmfile::new(&path).expect("测试 ncm 文件应当可以打开");
         let (tx, _rx) = unbounded::<Signal>();
         let cancel = Arc::new(AtomicBool::new(false));
-        let data = ncm
+        let music_base = ncm
             .parse_and_decrypt(&Messager(Some(tx)), cancel.as_ref())
             .expect("解析与解密应当成功");
+        assert!(!music_base.is_empty(), "音乐数据不应为空");
 
-        // get_pic 独立解析应与 parse_and_decrypt 的封面一致
+        // get_pic 独立解析应返回非空封面
         let mut ncm = Ncmfile::new(&path).expect("测试 ncm 文件应当可以打开");
         let pic = ncm.get_pic().expect("获取封面应当成功");
-        assert_eq!(pic, data.cover_data, "封面数据应一致");
+        assert!(!pic.is_empty(), "封面数据不应为空");
 
         // get_music_data 独立解析应与 parse_and_decrypt 的音乐一致
         let mut ncm = Ncmfile::new(&path).expect("测试 ncm 文件应当可以打开");
@@ -453,7 +459,7 @@ mod tests {
         let music = ncm
             .get_music_data(Some(tx), cancel)
             .expect("获取音乐应当成功");
-        assert_eq!(music, data.music_data, "音乐数据应一致");
+        assert_eq!(music, music_base, "音乐数据应一致");
     }
 
     #[test]
@@ -493,5 +499,33 @@ mod tests {
         ncm.seek(SeekFrom::Start(size - 4))
             .expect("seek 应成功");
         assert_eq!(ncm.seekread(100).expect("读取应成功").len(), 4);
+    }
+
+    #[test]
+    fn getters_are_order_independent() {
+        use crossbeam_channel::unbounded;
+
+        let path = format!(
+            "{}/test/1/$uNDOWN - Stray.wav.ncm",
+            env!("CARGO_MANIFEST_DIR")
+        );
+
+        // 先调用 get_music_data（读到文件末尾，游标落在 EOF），
+        // 再调用 get_pic / get_music_info，验证它们都会自动归位到文件头重新解析
+        let mut ncm = Ncmfile::new(&path).expect("测试 ncm 文件应当可以打开");
+        let (tx, _rx) = unbounded::<Signal>();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let music = ncm
+            .get_music_data(Some(tx), cancel)
+            .expect("获取音乐应当成功");
+        assert!(!music.is_empty(), "音乐数据不应为空");
+
+        let pic = ncm.get_pic().expect("游标在 EOF 时 get_pic 应自动归位");
+        assert!(!pic.is_empty(), "封面数据不应为空");
+
+        let info = ncm
+            .get_music_info()
+            .expect("游标在 EOF 时 get_music_info 应自动归位");
+        assert!(!info.is_empty(), "音乐信息不应为空");
     }
 }
