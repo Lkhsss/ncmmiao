@@ -81,9 +81,8 @@ ncmmiao -vvv
 
 本项目的核心解密逻辑同时以 Rust 库的形式提供（`src/lib.rs`），`src/main.rs` 仅负责命令行界面。在其他 Rust 项目中可以直接引用：
 
-```toml
-[dependencies]
-ncmmiao = { git = "https://github.com/lkhsss/ncmmiao" }
+```shell
+cargo add ncmmiao
 ```
 
 ```rust
