@@ -1,6 +1,19 @@
 # NcmMiao :tada:
 
+![GitHub top language](https://img.shields.io/github/languages/top/lkhsss/ncmmiao)
+![docs.rs](https://img.shields.io/docsrs/ncmmiao)
+![Crates.io Downloads (recent)](https://img.shields.io/crates/dr/ncmmiao)
+![Crates.io Total Downloads](https://img.shields.io/crates/d/ncmmiao)
+![Crates.io Size](https://img.shields.io/crates/size/ncmmiao)
+![Crates.io Version](https://img.shields.io/crates/v/ncmmiao)
+
+![GitHub last commit](https://img.shields.io/github/last-commit/lkhsss/ncmmiao)
+![GitHub Release Date](https://img.shields.io/github/release-date/lkhsss/ncmmiao)
+![GitHub Release](https://img.shields.io/github/v/release/lkhsss/ncmmiao)
 [![Release](https://github.com/Lkhsss/ncmmiao/actions/workflows/build.yml/badge.svg)](https://github.com/Lkhsss/ncmmiao/actions/workflows/build.yml)
+
+![GitHub Repo stars](https://img.shields.io/github/stars/lkhsss/ncmmiao)
+![GitHub forks](https://img.shields.io/github/forks/lkhsss/ncmmiao)
 
 > 当前已不支持win7
 
