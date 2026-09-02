@@ -1,6 +1,6 @@
 # NcmMiao :tada:
 
-[![Release](https://github.com/Lkhsss/ncmmiao/actions/workflows/build.yml/badge.svg?branch=main&event=workflow_run)](https://github.com/Lkhsss/ncmmiao/actions/workflows/build.yml)
+[![Release](https://github.com/Lkhsss/ncmmiao/actions/workflows/build.yml/badge.svg)](https://github.com/Lkhsss/ncmmiao/actions/workflows/build.yml)
 
 > 当前已不支持win7
 
